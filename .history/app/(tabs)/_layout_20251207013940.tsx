@@ -1,38 +1,35 @@
 // app/(tabs)/_layout.tsx
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 
-export default function TabsLayout() {
+export default function TabLayout() {
   return (
     <Tabs>
-      {/* 左：Groups */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Groups',
+          title: "Groups",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />
 
-      {/* 中间：+ 新账单 */}
       <Tabs.Screen
         name="quick-add"
         options={{
-          title: '',
-          tabBarLabel: '',
+          title: "",
+          tabBarLabel: "",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="add-circle" size={size + 6} color={color} />
           ),
         }}
       />
 
-      {/* 右：Settings */}
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: "Settings",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),

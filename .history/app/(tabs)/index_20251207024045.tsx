@@ -1,11 +1,9 @@
 // app/(tabs)/index.tsx
-
-import type {
+import GroupCard, {
   ExpenseType,
   Group,
   GroupStatus,
-} from "@/components/group/GroupCard"; // 现在只拿类型，不再用里面的 UI 组件
-
+} from "@/components/group/GroupCard";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
@@ -15,13 +13,14 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
-// ========== 筛选类型 ==========
 type TimeFilter = "all" | "lastYear" | "older";
 type StatusFilter = "all" | GroupStatus;
 type TypeFilter = "all" | ExpenseType;
 
-// ========== 假数据：跨 3 年的旅游 / 购物记录 ==========
-// 注意：这里的结构是 Group 类型 + ownerId + members
+// ======= 假数据：跨 3 年的旅游 / 购物记录 =======
+// 这里相比你原来的 demoGroups，多加了：
+//  - ownerId：这个 group 的创建者是谁
+//  - members：所有参与成员，用于显示左下角的一排头像 & 群主头像
 const demoGroups: Group[] = [
   {
     id: "1",
@@ -45,7 +44,7 @@ const demoGroups: Group[] = [
     membersCount: 4,
     totalExpenses: 1520,
     startDate: "2023-01-01",
-    endDate: null,
+    endDate: null, // 一直在用
     status: "ongoing",
     types: ["household", "other"],
     ownerId: "me",
@@ -126,121 +125,7 @@ const demoGroups: Group[] = [
   },
 ];
 
-// ========== 把类型值变成人话标签 ==========
-function formatTypeLabel(type: ExpenseType | string): string {
-  switch (type) {
-    case "travel":
-      return "Travel";
-    case "food":
-      return "Food & drinks";
-    case "shopping":
-      return "Shopping";
-    case "transport":
-      return "Transport";
-    case "household":
-      return "Household";
-    case "other":
-      return "Other";
-    default:
-      return String(type);
-  }
-}
-
-// ========== 单个 Group 卡片（包含：状态 + 群主头像 + 左下角一排头像） ==========
-function GroupCardLocal({ group }: { group: Group }) {
-  const isFinished = group.status === "finished";
-
-  const owner =
-    group.members?.find((m) => m.isOwner) ??
-    group.members?.find((m) => m.id === group.ownerId);
-
-  const typesLabels = (group.types || []).map(formatTypeLabel).join(" · ");
-
-  return (
-    <Pressable onPress={() => router.push(`/group/${group.id}`)}>
-      <ThemedView style={styles.card}>
-        {/* 第一行：状态 + 日期 */}
-        <View style={styles.cardHeaderRow}>
-          <View
-            style={[
-              styles.statusPill,
-              isFinished ? styles.statusFinished : styles.statusOngoing,
-            ]}
-          >
-            <ThemedText
-              style={isFinished ? styles.statusTextFinished : styles.statusTextOngoing}
-            >
-              {isFinished ? "Finished" : "Not Finished"}
-            </ThemedText>
-          </View>
-
-          <ThemedText style={styles.dateText}>
-            {group.endDate
-              ? `${group.startDate}  →  ${group.endDate}`
-              : `From ${group.startDate}`}
-          </ThemedText>
-        </View>
-
-        {/* 第二行：群主头像 + 标题 */}
-        <View style={styles.titleRow}>
-          {owner && (
-            <View
-              style={[
-                styles.ownerAvatar,
-                { backgroundColor: owner.avatarColor || "#9ca3af" },
-              ]}
-            >
-              <ThemedText style={styles.ownerAvatarText}>
-                {owner.name.charAt(0).toUpperCase()}
-              </ThemedText>
-            </View>
-          )}
-
-          <ThemedText type="defaultSemiBold" style={styles.cardTitle}>
-            {group.name}
-          </ThemedText>
-        </View>
-
-        {/* 第三行：成员数量 + 总金额 */}
-        <ThemedText style={styles.membersLine}>
-          {group.membersCount} members · {group.totalExpenses.toFixed(2)} €
-        </ThemedText>
-
-        {/* 第四行：消费类型 */}
-        {!!typesLabels && (
-          <ThemedText style={styles.categoriesLine}>{typesLabels}</ThemedText>
-        )}
-
-        {/* 第五行：左下角成员头像一排 + 右侧提示文字 */}
-        <View style={styles.bottomRow}>
-          {/* 左下角：所有参与成员的头像 */}
-          <View style={styles.avatarsRow}>
-            {group.members?.map((m) => (
-              <View
-                key={m.id}
-                style={[
-                  styles.smallAvatar,
-                  { backgroundColor: m.avatarColor || "#9ca3af" },
-                ]}
-              >
-                <ThemedText style={styles.smallAvatarText}>
-                  {m.name.charAt(0).toUpperCase()}
-                </ThemedText>
-              </View>
-            ))}
-          </View>
-
-          {/* 右边提示 */}
-          <ThemedText style={styles.tapHint}>
-            Tap to see balances and expenses
-          </ThemedText>
-        </View>
-      </ThemedView>
-    </Pressable>
-  );
-}
-
-// ========== 页面组件：包含 Filter + 列表 ==========
+// ======= 页面组件 =======
 export default function GroupsScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
@@ -280,7 +165,7 @@ export default function GroupsScreen() {
 
         return true;
       })
-      .slice()
+      .slice() // 复制一份再排序，避免修改原数组
       .sort((a, b) => {
         // 时间越早越靠前
         const aMs = new Date(a.startDate).getTime();
@@ -408,9 +293,9 @@ export default function GroupsScreen() {
       {/* 分割线 */}
       <View style={{ height: 8 }} />
 
-      {/* Group 列表：用我们自己写的 GroupCardLocal */}
+      {/* Group 列表 */}
       {filteredGroups.map((g) => (
-        <GroupCardLocal key={g.id} group={g} />
+        <GroupCard key={g.id} group={g} />
       ))}
 
       {filteredGroups.length === 0 && (
@@ -422,7 +307,7 @@ export default function GroupsScreen() {
   );
 }
 
-// ========== 小小的 Chip 组件，用来当筛选按钮 ==========
+// ======= 小小的 Chip 组件，用来当筛选按钮 =======
 interface FilterChipProps {
   label: string;
   active: boolean;
@@ -442,9 +327,7 @@ function FilterChip({ label, active, onPress }: FilterChipProps) {
   );
 }
 
-// ========== 样式 ==========
 const styles = StyleSheet.create({
-  // —— Filter 一堆保持不变 ——
   filterToggleRow: {
     marginTop: 8,
     marginBottom: 4,
@@ -498,100 +381,5 @@ const styles = StyleSheet.create({
   chipTextActive: {
     fontSize: 12,
     color: "white",
-  },
-
-  // —— Group 卡片相关样式（新增的） ——
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 12,
-    marginBottom: 12,
-    gap: 6,
-  },
-  cardHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusFinished: {
-    backgroundColor: "#f3f4f6",
-  },
-  statusOngoing: {
-    backgroundColor: "#fee2e2",
-  },
-  statusTextFinished: {
-    fontSize: 11,
-    color: "#6b7280",
-  },
-  statusTextOngoing: {
-    fontSize: 11,
-    color: "#b91c1c",
-  },
-  dateText: {
-    fontSize: 11,
-    opacity: 0.7,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-    gap: 8,
-  },
-  ownerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ownerAvatarText: {
-    color: "white",
-    fontSize: 13,
-  },
-  cardTitle: {
-    fontSize: 18,
-  },
-  membersLine: {
-    marginTop: 4,
-    fontSize: 13,
-  },
-  categoriesLine: {
-    fontSize: 12,
-    opacity: 0.8,
-  },
-  bottomRow: {
-    marginTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  avatarsRow: {
-    flexDirection: "row",
-    flexWrap: "nowrap",
-    gap: 4,
-  },
-  smallAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  smallAvatarText: {
-    fontSize: 11,
-    color: "white",
-  },
-  tapHint: {
-    fontSize: 11,
-    opacity: 0.7,
-    flexShrink: 1,
-    textAlign: "right",
   },
 });
