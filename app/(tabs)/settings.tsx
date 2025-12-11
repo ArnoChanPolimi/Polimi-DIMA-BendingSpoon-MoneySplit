@@ -7,101 +7,81 @@ import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
 import { useState } from 'react';
-import {
-    Pressable,
-    StyleSheet,
-    Switch,
-    View
-} from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
+import { useAuth } from '../../components/auth/AuthContext';
 
 type ThemeMode = 'system' | 'light' | 'dark';
 type Language = 'en' | 'zh';
 type Currency = 'EUR' | 'USD' | 'CNY';
 
 export default function SettingsScreen() {
-  // ===== 用户登录 Demo 状态 =====
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userName, setUserName] = useState('Demo User');
-  const [email, setEmail] = useState('demo@example.com');
+  const { user, logout } = useAuth();
 
-  // ===== 偏好设置 Demo 状态 =====
   const [theme, setTheme] = useState<ThemeMode>('system');
   const [language, setLanguage] = useState<Language>('en');
   const [currency, setCurrency] = useState<Currency>('EUR');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
-  // 下拉框展开 / 收起状态
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
 
-  const handleLoginDemo = () => {
-    setIsLoggedIn(true);
-    setUserName('Hong Chen');
-    setEmail('your.email@example.com');
-  };
-
-  const handleLogoutDemo = () => {
-    setIsLoggedIn(false);
-  };
-
   const themeLabel =
-    theme === 'system' ? 'Follow System' : theme === 'light' ? 'Light' : 'Dark';
+    theme === 'system' ? 'System' : theme === 'light' ? 'Light' : 'Dark';
 
-  const languageLabel = language === 'en' ? 'English' : '中文';
+  const languageLabel = language === 'en' ? 'English' : 'Chinese';
 
   const currencyLabel =
-    currency === 'EUR'
-      ? 'EUR €'
-      : currency === 'USD'
-      ? 'USD $'
-      : 'CNY ¥';
+    currency === 'EUR' ? 'EUR €' : currency === 'USD' ? 'USD $' : 'CNY ¥';
 
   return (
     <AppScreen>
       <AppTopBar title="Settings" />
 
-      {/* ==== 用户信息区块 ==== */}
+      {/* ===== Account Section ===== */}
       <SettingSection title="Account">
-        {isLoggedIn ? (
+        {user ? (
           <ThemedView style={styles.userCard}>
             <View style={styles.avatar}>
               <ThemedText type="defaultSemiBold">
-                {userName.charAt(0).toUpperCase()}
+                {(user.email || 'U')[0].toUpperCase()}
               </ThemedText>
             </View>
             <View style={styles.userInfo}>
-              <ThemedText type="defaultSemiBold">{userName}</ThemedText>
-              <ThemedText style={styles.userEmail}>{email}</ThemedText>
+              <ThemedText type="defaultSemiBold">
+                {user.email?.split('@')[0]}
+              </ThemedText>
+              <ThemedText style={styles.userEmail}>{user.email}</ThemedText>
             </View>
-            <PrimaryButton label="Log out (demo)" onPress={handleLogoutDemo} />
+
+            <PrimaryButton label="Log out" onPress={logout} />
           </ThemedView>
         ) : (
           <ThemedView style={styles.loginBox}>
-            <ThemedText style={styles.loginText}>
-              You are not signed in.
-            </ThemedText>
-            <PrimaryButton
-              label="Log in / Sign up (demo)"
-              onPress={handleLoginDemo}
-            />
+            <ThemedText style={styles.loginText}>You are not signed in.</ThemedText>
+
+            <Link href="/auth/login" asChild>
+              <PrimaryButton label="Log in / Sign up" onPress={() => {}} />
+            </Link>
+
             <ThemedText style={styles.loginHint}>
-              In the real app, this will open an authentication flow (Firebase /
-              email / Google, etc.).
+              This will open the authentication flow (Firebase email & password).
             </ThemedText>
           </ThemedView>
         )}
       </SettingSection>
 
-      {/* ==== 主题、语言、货币：下拉选择 ==== */}
+      {/* ===== Preferences Section ===== */}
       <SettingSection title="Preferences">
-        {/* Theme 下拉行 */}
+
+        {/* Theme */}
         <SettingRow
           title="Theme"
           subtitle="System / Light / Dark"
           onPress={() => {
-            setShowThemeDropdown((prev) => !prev);
+            setShowThemeDropdown(!showThemeDropdown);
             setShowLanguageDropdown(false);
             setShowCurrencyDropdown(false);
           }}
@@ -115,10 +95,11 @@ export default function SettingsScreen() {
             </ThemedView>
           }
         />
+
         {showThemeDropdown && (
           <ThemedView style={styles.dropdown}>
             <DropdownOption
-              label="Follow System"
+              label="System"
               selected={theme === 'system'}
               onPress={() => {
                 setTheme('system');
@@ -144,12 +125,12 @@ export default function SettingsScreen() {
           </ThemedView>
         )}
 
-        {/* Language 下拉行 */}
+        {/* Language */}
         <SettingRow
           title="Language"
           subtitle="App language"
           onPress={() => {
-            setShowLanguageDropdown((prev) => !prev);
+            setShowLanguageDropdown(!showLanguageDropdown);
             setShowThemeDropdown(false);
             setShowCurrencyDropdown(false);
           }}
@@ -157,14 +138,13 @@ export default function SettingsScreen() {
             <ThemedView style={styles.rightWithIcon}>
               <ThemedText>{languageLabel}</ThemedText>
               <Ionicons
-                name={
-                  showLanguageDropdown ? 'chevron-up-outline' : 'chevron-down-outline'
-                }
+                name={showLanguageDropdown ? 'chevron-up-outline' : 'chevron-down-outline'}
                 size={16}
               />
             </ThemedView>
           }
         />
+
         {showLanguageDropdown && (
           <ThemedView style={styles.dropdown}>
             <DropdownOption
@@ -176,7 +156,7 @@ export default function SettingsScreen() {
               }}
             />
             <DropdownOption
-              label="中文"
+              label="Chinese"
               selected={language === 'zh'}
               onPress={() => {
                 setLanguage('zh');
@@ -186,12 +166,12 @@ export default function SettingsScreen() {
           </ThemedView>
         )}
 
-        {/* Currency 下拉行 */}
+        {/* Currency */}
         <SettingRow
           title="Currency"
-          subtitle="Default currency for groups"
+          subtitle="Default currency"
           onPress={() => {
-            setShowCurrencyDropdown((prev) => !prev);
+            setShowCurrencyDropdown(!showCurrencyDropdown);
             setShowThemeDropdown(false);
             setShowLanguageDropdown(false);
           }}
@@ -207,6 +187,7 @@ export default function SettingsScreen() {
             </ThemedView>
           }
         />
+
         {showCurrencyDropdown && (
           <ThemedView style={styles.dropdown}>
             <DropdownOption
@@ -237,7 +218,7 @@ export default function SettingsScreen() {
         )}
       </SettingSection>
 
-      {/* ==== 通知设置 ==== */}
+      {/* ===== Notifications ===== */}
       <SettingSection title="Notifications">
         <SettingRow
           title="Expense changes"
@@ -251,21 +232,20 @@ export default function SettingsScreen() {
         />
       </SettingSection>
 
-      {/* ==== 项目信息 ==== */}
+      {/* ===== About ===== */}
       <SettingSection title="About this app">
         <ThemedText>
-          Shared Expenses App – course project based on Bending Spoons idea.
+          Shared Expenses App — course project based on a Bending Spoons idea.
         </ThemedText>
         <ThemedText>
-          These settings are demo-only. Later you can persist them to global
-          state and remote user profile.
+          These settings are demo-only; you may persist them to a backend later.
         </ThemedText>
       </SettingSection>
     </AppScreen>
   );
 }
 
-// ===== 下拉框里的单个选项 =====
+/* ---------------- Dropdown Option Component ---------------- */
 interface DropdownOptionProps {
   label: string;
   selected: boolean;
@@ -277,14 +257,13 @@ function DropdownOption({ label, selected, onPress }: DropdownOptionProps) {
     <Pressable onPress={onPress}>
       <ThemedView style={styles.dropdownOption}>
         <ThemedText>{label}</ThemedText>
-        {selected && (
-          <Ionicons name="checkmark-outline" size={16} />
-        )}
+        {selected && <Ionicons name="checkmark-outline" size={16} />}
       </ThemedView>
     </Pressable>
   );
 }
 
+/* ---------------- Styles ---------------- */
 const styles = StyleSheet.create({
   userCard: {
     padding: 12,
