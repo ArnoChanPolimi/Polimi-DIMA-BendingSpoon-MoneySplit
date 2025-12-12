@@ -1,4 +1,4 @@
-// app/auth/login.tsx
+// app/auth/signup.tsx
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
@@ -7,39 +7,50 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
 } from "react-native";
 
-export default function LoginScreen() {
+export default function SignupScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordAgain, setPasswordAgain] = useState("");
 
-  // 这里只是 UI 占位，真正逻辑以后再填
-  const handleEmailLogin = () => {
-    alert("TODO: implement email login");
+  const handleGoogleSignUp = () => {
+    // TODO: 走 Google 授权注册逻辑
+    alert("TODO: implement Google sign up");
   };
 
-  const handleGoogleLogin = () => {
-    alert("TODO: implement Google login");
+  const handleSendVerification = () => {
+    // TODO: 后端发送验证邮件，并提示用户去浏览器/邮箱完成绑定
+    alert("TODO: send verification email & open browser");
   };
 
-  const handleForgotPassword = () => {
-    alert("TODO: open password reset page in browser");
+  const handleEmailSignup = () => {
+    if (!email || !password || !passwordAgain) {
+      alert("Please fill all fields.");
+      return;
+    }
+    if (password !== passwordAgain) {
+      alert("Passwords do not match.");
+      return;
+    }
+
+    // TODO: 调用真正的注册接口，然后保存用户信息
+    alert("TODO: implement email sign up");
   };
 
   return (
     <AppScreen>
-      {/* 这里加上返回按钮 */}
-      <AppTopBar
-        title="Log in"
+      <AppTopBar 
+        title="Sign up"
         showBack
-        onBackPress={() => router.replace("/(tabs)/settings")}  
+        onBackPress={() => router.replace("/auth/login")}
       />
 
       <KeyboardAvoidingView
@@ -51,18 +62,22 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <ThemedText type="title" style={styles.title}>
-            Welcome back
+            Create your account
           </ThemedText>
           <ThemedText style={styles.subtitle}>
-            Log in to access your groups and split history across devices.
+            Sign up with your email or Google. We&apos;ll bind your email and
+            send a verification link that opens in your browser (Chrome, Edge, etc.).
           </ThemedText>
 
-          {/* —— 1. Google 登录入口 —— */}
+          {/* —— 1. Google 注册 —— */}
           <ThemedText type="subtitle" style={styles.sectionTitle}>
-            Quick login
+            Quick sign up
           </ThemedText>
 
-          <Pressable style={styles.googleButton} onPress={handleGoogleLogin}>
+          <Pressable
+            style={styles.googleButton}
+            onPress={handleGoogleSignUp}
+          >
             <Ionicons name="logo-google" size={18} style={{ marginRight: 8 }} />
             <ThemedText style={styles.googleButtonText}>
               Continue with Google
@@ -71,13 +86,11 @@ export default function LoginScreen() {
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <ThemedText style={styles.dividerText}>
-              or log in with email
-            </ThemedText>
+            <ThemedText style={styles.dividerText}>or sign up with email</ThemedText>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* —— 2. 邮箱 + 密码登录 —— */}
+          {/* —— 2. 邮箱注册 —— */}
           <ThemedView style={styles.formCard}>
             <ThemedText>Email</ThemedText>
             <TextInput
@@ -95,32 +108,53 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               secureTextEntry
-              placeholder="Your password"
+              placeholder="Create a password"
               value={password}
               onChangeText={setPassword}
             />
 
-            <Pressable style={styles.forgotRow} onPress={handleForgotPassword}>
-              <ThemedText style={styles.forgotText}>
-                Forgot password?
+            <View style={{ height: 10 }} />
+
+            <ThemedText>Repeat password</ThemedText>
+            <TextInput
+              style={styles.input}
+              secureTextEntry
+              placeholder="Repeat your password"
+              value={passwordAgain}
+              onChangeText={setPasswordAgain}
+            />
+
+            <View style={{ height: 10 }} />
+
+            <ThemedText style={styles.helperText}>
+              After signing up, we&apos;ll send a verification email. You may be
+              redirected to your browser or email app to complete the binding.
+            </ThemedText>
+
+            <Pressable
+              style={[styles.secondaryButton, { marginTop: 8 }]}
+              onPress={handleSendVerification}
+            >
+              <ThemedText style={styles.secondaryButtonText}>
+                Send verification email
               </ThemedText>
             </Pressable>
 
             <Pressable
-              style={[styles.primaryButton, { marginTop: 12 }]}
-              onPress={handleEmailLogin}
+              style={[styles.primaryButton, { marginTop: 10 }]}
+              onPress={handleEmailSignup}
             >
-              <ThemedText style={styles.primaryButtonText}>Log in</ThemedText>
+              <ThemedText style={styles.primaryButtonText}>Sign up</ThemedText>
             </Pressable>
           </ThemedView>
 
-          {/* —— 3. 去注册 —— */}
+          {/* —— 3. 已有账号去登录 —— */}
           <View style={styles.bottomRow}>
             <ThemedText style={{ fontSize: 13 }}>
-              Don&apos;t have an account?
+              Already have an account?
             </ThemedText>
-            <Pressable onPress={() => router.push("/auth/signup")}>
-              <ThemedText style={styles.linkText}>Sign up</ThemedText>
+            <Pressable onPress={() => router.push("/auth/login")}>
+              <ThemedText style={styles.linkText}>Log in</ThemedText>
             </Pressable>
           </View>
         </ScrollView>
@@ -192,13 +226,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 14,
   },
-  forgotRow: {
-    alignItems: "flex-end",
-    marginTop: 6,
-  },
-  forgotText: {
-    fontSize: 12,
-    color: "#2563eb",
+  helperText: {
+    fontSize: 11,
+    opacity: 0.8,
   },
   primaryButton: {
     borderRadius: 999,
@@ -209,6 +239,17 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "white",
     fontSize: 14,
+  },
+  secondaryButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#2563eb",
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: "#2563eb",
+    fontSize: 13,
   },
   bottomRow: {
     marginTop: 12,

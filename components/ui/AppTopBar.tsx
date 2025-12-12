@@ -1,13 +1,15 @@
 // components/ui/AppTopBar.tsx
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { Pressable, StyleSheet, View } from "react-native";
 
 type AppTopBarProps = {
   title: string;
   showBack?: boolean;
+  /** ✅ 新增：可以自己决定返回去哪儿 */
+  onBackPress?: () => void;
   rightLabel?: string;
   onRightPress?: () => void;
   rightIconName?: keyof typeof Ionicons.glyphMap;
@@ -17,6 +19,7 @@ type AppTopBarProps = {
 export default function AppTopBar({
   title,
   showBack = false,
+  onBackPress,
   rightLabel,
   onRightPress,
   rightIconName,
@@ -24,26 +27,30 @@ export default function AppTopBar({
 }: AppTopBarProps) {
   return (
     <ThemedView style={styles.container}>
-      {/* 左侧：可选返回按钮 */}
+      {/* 左侧：可选返回按钮，占位保证标题居中 */}
       <View style={styles.left}>
-        {showBack && (
-          <Pressable onPress={() => router.back()}>
+        {showBack ? (
+          <Pressable
+            onPress={onBackPress ?? (() => router.back())}
+            hitSlop={10}
+          >
             <Ionicons name="chevron-back-outline" size={20} />
           </Pressable>
+        ) : (
+          <View style={{ width: 20 }} />
         )}
       </View>
 
-      {/* 中间：标题 */}
       <ThemedText type="title" style={styles.title}>
         {title}
       </ThemedText>
 
-      {/* 右侧：文字按钮 + 图标按钮 */}
       <View style={styles.right}>
         {rightLabel && (
           <Pressable
             onPress={onRightPress}
             style={styles.rightLabelWrapper}
+            hitSlop={10}
           >
             <ThemedText type="defaultSemiBold" style={styles.rightLabel}>
               {rightLabel}
@@ -52,7 +59,11 @@ export default function AppTopBar({
         )}
 
         {rightIconName && (
-          <Pressable onPress={onRightIconPress} style={styles.iconWrapper}>
+          <Pressable
+            onPress={onRightIconPress}
+            style={styles.iconWrapper}
+            hitSlop={10}
+          >
             <Ionicons name={rightIconName} size={22} />
           </Pressable>
         )}
@@ -65,22 +76,22 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: 8,
     marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   left: {
     width: 40,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
   title: {
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   right: {
     width: 80,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     gap: 8,
   },
   rightLabelWrapper: {
@@ -88,7 +99,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
   },
   rightLabel: {
     fontSize: 14,
