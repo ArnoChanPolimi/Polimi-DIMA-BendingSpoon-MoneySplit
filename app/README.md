@@ -5,9 +5,10 @@
 当前计划页面：
 
 - `app/(tabs)/index.tsx` – HomeScreen（首页）
-- `app/(tabs)/ledgers.tsx` – LedgerListScreen（账本列表页）
 - `app/(tabs)/settings.tsx` – SettingsScreen（设置/关于页）
 - `app/ledger/[id].tsx` – LedgerDetailScreen（账本详情页）
+
+`app/(tabs)`下是软件under bar的按钮，不要随便修改！
 
 约定：
 
