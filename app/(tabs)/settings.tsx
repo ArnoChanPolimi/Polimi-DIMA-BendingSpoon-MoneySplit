@@ -1,4 +1,5 @@
 // app/(tabs)/settings.tsx
+
 import SettingRow from "@/components/settings/SettingRow";
 import SettingSection from "@/components/settings/SettingSection";
 import { ThemedText } from "@/components/themed-text";
@@ -6,11 +7,11 @@ import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import PrimaryButton from "@/components/ui/PrimaryButton";
+import { useAuth } from "@/services/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Switch, View } from "react-native";
-import { useAuth } from "../../components/auth/AuthContext";
 
 type ThemeMode = "system" | "light" | "dark";
 type Language = "en" | "zh";
@@ -137,8 +138,7 @@ export default function SettingsScreen() {
             <Link href="/auth/signup" asChild>
               <PrimaryButton
                 label="Sign up"
-                variant="secondary"
-                onPress={() => {}}
+                onPress={() => router.push("/auth/signup")}
               />
             </Link>
 

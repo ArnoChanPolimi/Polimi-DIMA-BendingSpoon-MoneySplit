@@ -13,12 +13,13 @@ export default function AppScreen({ children }: AppScreenProps) {
     <SafeAreaView
       style={styles.safeArea}
       // 只管上、左、右的安全区域，底下留给 TabBar
-      edges={['top', 'left', 'right']}
+      edges={['top', 'left', 'right', 'bottom']}
     >
       <ThemedView style={styles.container}>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false} // 可选，美观
         >
           {children}
         </ScrollView>
