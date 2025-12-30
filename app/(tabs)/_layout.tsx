@@ -1,15 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import AuthProvider from '../../components/auth/AuthContext';
+// app/(tabs)/_layout.tsx
+import { AppProviders } from "@/services/Providers";
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
   return (
-    <AuthProvider>
+    <AppProviders>
       <Tabs>
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Groups',
+            title: "Groups",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-outline" size={size} color={color} />
             ),
@@ -18,8 +19,8 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="quick-add"
           options={{
-            title: '',
-            tabBarLabel: '',
+            title: "",
+            tabBarLabel: "",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="add-circle" size={size + 6} color={color} />
             ),
@@ -28,13 +29,13 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="settings"
           options={{
-            title: 'Settings',
+            title: "Settings",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="settings-outline" size={size} color={color} />
             ),
           }}
         />
       </Tabs>
-    </AuthProvider>
+    </AppProviders>
   );
 }

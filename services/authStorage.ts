@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import type { Session } from './authApi';
+import type { Session } from './AuthContext';
 
 const TOKEN = 'ms_token';
 const USER  = 'ms_user';

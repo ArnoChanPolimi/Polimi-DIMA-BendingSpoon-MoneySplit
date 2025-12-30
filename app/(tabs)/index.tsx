@@ -6,6 +6,13 @@ import type {
   GroupStatus,
 } from "@/components/group/GroupCard"; // 现在只拿类型，不再用里面的 UI 组件
 
+// Extended Group type with members array
+type GroupWithMembers = Group & {
+  members: Array<{ id: string; name: string; avatarColor: string; isOwner?: boolean }>;
+  ownerId?: string; // 新增：允许对象包含 ownerId
+};
+
+
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
@@ -22,7 +29,7 @@ type TypeFilter = "all" | ExpenseType;
 
 // ========== 假数据：跨 3 年的旅游 / 购物记录 ==========
 // 注意：这里的结构是 Group 类型 + ownerId + members
-const demoGroups: Group[] = [
+const demoGroups: GroupWithMembers[] = [
   {
     id: "1",
     name: "Paris Trip 2022",
@@ -147,7 +154,7 @@ function formatTypeLabel(type: ExpenseType | string): string {
 }
 
 // ========== 单个 Group 卡片（包含：状态 + 群主头像 + 左下角一排头像） ==========
-function GroupCardLocal({ group }: { group: Group }) {
+function GroupCardLocal({ group }: { group: GroupWithMembers }) {
   const isFinished = group.status === "finished";
 
   const owner =
