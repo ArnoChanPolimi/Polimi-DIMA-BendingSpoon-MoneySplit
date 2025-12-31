@@ -7,155 +7,132 @@ import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import PrimaryButton from "@/components/ui/PrimaryButton";
+import { t } from "@/core/i18n";
+import { useSettings } from "@/core/settings/SettingsContext";
+import { useThemeColor } from "@/hooks/use-theme-color";
 import { useAuth } from "@/services/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Switch, View } from "react-native";
 
-type ThemeMode = "system" | "light" | "dark";
-type Language = "en" | "zh";
 type Currency = "EUR" | "USD" | "CNY";
 
 export default function SettingsScreen() {
   const { user, logout } = useAuth();
+  const { theme, language, setTheme, setLanguage } = useSettings();
 
-  const [theme, setTheme] = useState<ThemeMode>("system");
-  const [language, setLanguage] = useState<Language>("en");
+  // ✅ 主题色（统一解决 #ddd/#eee/#fff 写死问题）
+  const borderColor = useThemeColor({}, "border");
+  const cardColor = useThemeColor({}, "card");
+  const textColor = useThemeColor({}, "text");
+  const backgroundColor = useThemeColor({}, "background");
+
   const [currency, setCurrency] = useState<Currency>("EUR");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
-
-  // 账号菜单（右上角三个点）展开/收起
   const [showAccountMenu, setShowAccountMenu] = useState(false);
 
-  const themeLabel =
-    theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
+  const themeLabel = useMemo(() => {
+    return theme === "system" ? t("system") : theme === "light" ? t("light") : t("dark");
+  }, [theme]);
 
-  const languageLabel = language === "en" ? "English" : "Chinese";
+  const languageLabel = useMemo(() => {
+    return language === "en" ? t("english") : language === "zh" ? t("chinese") : t("italian");
+  }, [language]);
 
   const currencyLabel =
     currency === "EUR" ? "EUR €" : currency === "USD" ? "USD $" : "CNY ¥";
 
-  // 从 user 里安全地拿出展示用信息
   const userEmail = user?.email ?? "";
   const userName = userEmail ? userEmail.split("@")[0] : "User";
   const avatarInitial = (userEmail || "U")[0].toUpperCase();
 
   return (
     <AppScreen>
-      <AppTopBar title="Settings" />
+      <AppTopBar title={t("settings")} />
 
       {/* ===== Account Section ===== */}
-      <SettingSection title="Account">
+      <SettingSection title={t("account")}>
         {user ? (
-          <ThemedView style={styles.userCard}>
-            {/* 上面一行：标题 + 三个点菜单按钮 */}
+          <ThemedView style={[styles.userCard, { borderColor, backgroundColor: cardColor }]}>
             <View style={styles.accountHeaderRow}>
-              <ThemedText type="defaultSemiBold">Signed in</ThemedText>
+              <ThemedText type="defaultSemiBold">{t("signedIn")}</ThemedText>
 
-              <Pressable
-                hitSlop={8}
-                onPress={() => setShowAccountMenu((prev) => !prev)}
-              >
-                <Ionicons name="ellipsis-vertical" size={18} />
+              <Pressable hitSlop={8} onPress={() => setShowAccountMenu((p) => !p)}>
+                <Ionicons name="ellipsis-vertical" size={18} color={textColor} />
               </Pressable>
             </View>
 
-            {/* 用户信息行：头像 + 名字 + 邮箱 */}
             <View style={styles.userRow}>
-              <View style={styles.avatar}>
-                <ThemedText type="defaultSemiBold">
-                  {avatarInitial}
-                </ThemedText>
-              </View>
+              <ThemedView style={[styles.avatar, { backgroundColor: backgroundColor, borderColor }]}>
+                <ThemedText type="defaultSemiBold">{avatarInitial}</ThemedText>
+              </ThemedView>
 
               <View style={styles.userInfo}>
                 <ThemedText type="defaultSemiBold">{userName}</ThemedText>
-                {!!userEmail && (
-                  <ThemedText style={styles.userEmail}>
-                    {userEmail}
-                  </ThemedText>
-                )}
+                {!!userEmail && <ThemedText style={styles.userEmail}>{userEmail}</ThemedText>}
               </View>
             </View>
 
             {/* 右上角菜单：Switch account / Log out */}
             {showAccountMenu && (
-              <ThemedView style={styles.accountMenu}>
+              <ThemedView
+                style={[
+                  styles.accountMenu,
+                  { borderColor, backgroundColor: cardColor },
+                ]}
+              >
                 <Pressable
                   style={styles.accountMenuItem}
                   onPress={() => {
                     setShowAccountMenu(false);
-                    // 切换用户：跳转到登录页，让他重新登陆
                     router.push("/auth/login");
                   }}
                 >
-                  <Ionicons
-                    name="people-outline"
-                    size={16}
-                    style={styles.accountMenuIcon}
-                  />
-                  <ThemedText>Switch account</ThemedText>
+                  <Ionicons name="people-outline" size={16} color={textColor} style={styles.accountMenuIcon} />
+                  <ThemedText>{t("switchAccount")}</ThemedText>
                 </Pressable>
 
                 <Pressable
                   style={styles.accountMenuItem}
                   onPress={async () => {
                     setShowAccountMenu(false);
-                    await logout(); // 调用你的全局注销逻辑
+                    await logout();
                   }}
                 >
-                  <Ionicons
-                    name="log-out-outline"
-                    size={16}
-                    style={styles.accountMenuIcon}
-                  />
-                  <ThemedText style={{ color: "#b91c1c" }}>
-                    Log out
-                  </ThemedText>
+                  <Ionicons name="log-out-outline" size={16} color={textColor} style={styles.accountMenuIcon} />
+                  <ThemedText style={styles.dangerText}>{t("logout")}</ThemedText>
                 </Pressable>
               </ThemedView>
             )}
           </ThemedView>
         ) : (
-          <ThemedView style={styles.loginBox}>
-            <ThemedText style={styles.loginText}>
-              You are not signed in.
-            </ThemedText>
+          <ThemedView style={[styles.loginBox, { borderColor, backgroundColor: cardColor }]}>
+            <ThemedText style={styles.loginText}>{t("notSignedIn")}</ThemedText>
 
-            {/* 登录按钮：去 login 界面 */}
             <Link href="/auth/login" asChild>
-              <PrimaryButton label="Log in" onPress={() => {}} />
+              <PrimaryButton label={t("login")} onPress={() => {}} />
             </Link>
 
-            {/* 注册按钮：去 signup 界面 */}
             <View style={{ height: 8 }} />
 
             <Link href="/auth/signup" asChild>
-              <PrimaryButton
-                label="Sign up"
-                onPress={() => router.push("/auth/signup")}
-              />
+              <PrimaryButton label={t("signup")} onPress={() => router.push("/auth/signup")} />
             </Link>
-
-            <ThemedText style={styles.loginHint}>
-              You can sign up with email (including Google), then log in with the
-              same account. Email verification may open your browser or email app.
-            </ThemedText>
           </ThemedView>
         )}
       </SettingSection>
 
       {/* ===== Preferences Section ===== */}
-      <SettingSection title="Preferences">
+      <SettingSection title={t("preferences")}>
         {/* Theme */}
         <SettingRow
-          title="Theme"
-          subtitle="System / Light / Dark"
+          title={t("theme")}
+          subtitle={t("themeSubtitle")}
           onPress={() => {
             setShowThemeDropdown(!showThemeDropdown);
             setShowLanguageDropdown(false);
@@ -165,50 +142,53 @@ export default function SettingsScreen() {
             <ThemedView style={styles.rightWithIcon}>
               <ThemedText>{themeLabel}</ThemedText>
               <Ionicons
-                name={
-                  showThemeDropdown
-                    ? "chevron-up-outline"
-                    : "chevron-down-outline"
-                }
+                name={showThemeDropdown ? "chevron-up-outline" : "chevron-down-outline"}
                 size={16}
+                color={textColor}
               />
             </ThemedView>
           }
         />
 
         {showThemeDropdown && (
-          <ThemedView style={styles.dropdown}>
+          <ThemedView style={[styles.dropdown, { borderColor, backgroundColor: cardColor }]}>
             <DropdownOption
-              label="System"
+              label={t("system")}
               selected={theme === "system"}
-              onPress={() => {
-                setTheme("system");
+              onPress={async () => {
+                await setTheme("system");
                 setShowThemeDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
             <DropdownOption
-              label="Light"
+              label={t("light")}
               selected={theme === "light"}
-              onPress={() => {
-                setTheme("light");
+              onPress={async () => {
+                await setTheme("light");
                 setShowThemeDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
             <DropdownOption
-              label="Dark"
+              label={t("dark")}
               selected={theme === "dark"}
-              onPress={() => {
-                setTheme("dark");
+              onPress={async () => {
+                await setTheme("dark");
                 setShowThemeDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
           </ThemedView>
         )}
 
         {/* Language */}
         <SettingRow
-          title="Language"
-          subtitle="App language"
+          title={t("language")}
+          subtitle={t("appLanguage")}
           onPress={() => {
             setShowLanguageDropdown(!showLanguageDropdown);
             setShowThemeDropdown(false);
@@ -218,42 +198,53 @@ export default function SettingsScreen() {
             <ThemedView style={styles.rightWithIcon}>
               <ThemedText>{languageLabel}</ThemedText>
               <Ionicons
-                name={
-                  showLanguageDropdown
-                    ? "chevron-up-outline"
-                    : "chevron-down-outline"
-                }
+                name={showLanguageDropdown ? "chevron-up-outline" : "chevron-down-outline"}
                 size={16}
+                color={textColor}
               />
             </ThemedView>
           }
         />
 
         {showLanguageDropdown && (
-          <ThemedView style={styles.dropdown}>
+          <ThemedView style={[styles.dropdown, { borderColor, backgroundColor: cardColor }]}>
             <DropdownOption
-              label="English"
+              label={t("english")}
               selected={language === "en"}
-              onPress={() => {
-                setLanguage("en");
+              onPress={async () => {
+                await setLanguage("en");
                 setShowLanguageDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
             <DropdownOption
-              label="Chinese"
+              label={t("chinese")}
               selected={language === "zh"}
-              onPress={() => {
-                setLanguage("zh");
+              onPress={async () => {
+                await setLanguage("zh");
                 setShowLanguageDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
+            />
+            <DropdownOption
+              label={t("italian")}
+              selected={language === "it"}
+              onPress={async () => {
+                await setLanguage("it");
+                setShowLanguageDropdown(false);
+              }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
           </ThemedView>
         )}
 
         {/* Currency */}
         <SettingRow
-          title="Currency"
-          subtitle="Default currency"
+          title={t("currency")}
+          subtitle={t("defaultCurrency")}
           onPress={() => {
             setShowCurrencyDropdown(!showCurrencyDropdown);
             setShowThemeDropdown(false);
@@ -263,19 +254,16 @@ export default function SettingsScreen() {
             <ThemedView style={styles.rightWithIcon}>
               <ThemedText>{currencyLabel}</ThemedText>
               <Ionicons
-                name={
-                  showCurrencyDropdown
-                    ? "chevron-up-outline"
-                    : "chevron-down-outline"
-                }
+                name={showCurrencyDropdown ? "chevron-up-outline" : "chevron-down-outline"}
                 size={16}
+                color={textColor}
               />
             </ThemedView>
           }
         />
 
         {showCurrencyDropdown && (
-          <ThemedView style={styles.dropdown}>
+          <ThemedView style={[styles.dropdown, { borderColor, backgroundColor: cardColor }]}>
             <DropdownOption
               label="EUR €"
               selected={currency === "EUR"}
@@ -283,6 +271,8 @@ export default function SettingsScreen() {
                 setCurrency("EUR");
                 setShowCurrencyDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
             <DropdownOption
               label="USD $"
@@ -291,6 +281,8 @@ export default function SettingsScreen() {
                 setCurrency("USD");
                 setShowCurrencyDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
             <DropdownOption
               label="CNY ¥"
@@ -299,27 +291,24 @@ export default function SettingsScreen() {
                 setCurrency("CNY");
                 setShowCurrencyDropdown(false);
               }}
+              borderColor={borderColor}
+              textColor={textColor}
             />
           </ThemedView>
         )}
       </SettingSection>
 
       {/* ===== Notifications ===== */}
-      <SettingSection title="Notifications">
+      <SettingSection title={t("notifications")}>
         <SettingRow
-          title="Expense changes"
-          subtitle="Notify me when an expense is added or edited"
-          right={
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-            />
-          }
+          title={t("expenseChanges")}
+          subtitle={t("notifyExpense")}
+          right={<Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled} />}
         />
       </SettingSection>
 
       {/* ===== About ===== */}
-      <SettingSection title="About this app">
+      <SettingSection title={t("about")}>
         <ThemedText>
           Shared Expenses App — course project based on a Bending Spoons idea.
         </ThemedText>
@@ -336,14 +325,16 @@ interface DropdownOptionProps {
   label: string;
   selected: boolean;
   onPress: () => void;
+  borderColor: string;
+  textColor: string;
 }
 
-function DropdownOption({ label, selected, onPress }: DropdownOptionProps) {
+function DropdownOption({ label, selected, onPress, borderColor, textColor }: DropdownOptionProps) {
   return (
     <Pressable onPress={onPress}>
-      <ThemedView style={styles.dropdownOption}>
+      <ThemedView style={[styles.dropdownOption, { borderBottomColor: borderColor }]}>
         <ThemedText>{label}</ThemedText>
-        {selected && <Ionicons name="checkmark-outline" size={16} />}
+        {selected && <Ionicons name="checkmark-outline" size={16} color={textColor} />}
       </ThemedView>
     </Pressable>
   );
@@ -355,7 +346,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#ddd",
     gap: 8,
     position: "relative",
   },
@@ -374,9 +364,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#bfdbfe",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
   },
   userInfo: {
     flex: 1,
@@ -392,8 +382,6 @@ const styles = StyleSheet.create({
     right: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#ddd",
-    backgroundColor: "#fff",
     overflow: "hidden",
     elevation: 4,
   },
@@ -405,22 +393,22 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   accountMenuIcon: {
-    opacity: 0.8,
+    opacity: 0.9,
   },
+  dangerText: {
+    color: "#b91c1c",
+  },
+
   loginBox: {
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#ddd",
     gap: 8,
   },
   loginText: {
     marginBottom: 4,
   },
-  loginHint: {
-    fontSize: 12,
-    opacity: 0.7,
-  },
+
   rightWithIcon: {
     flexDirection: "row",
     alignItems: "center",
@@ -431,7 +419,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
     overflow: "hidden",
   },
   dropdownOption: {
@@ -441,6 +428,5 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
 });

@@ -1,21 +1,17 @@
 // app/group/[groupId]/index.tsx
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import AppScreen from '@/components/ui/AppScreen';
-import AppTopBar from '@/components/ui/AppTopBar';
-import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import {
-    Alert,
-    Pressable,
-    StyleSheet,
-    View,
-} from 'react-native';
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import AppScreen from "@/components/ui/AppScreen";
+import AppTopBar from "@/components/ui/AppTopBar";
+import { t } from "@/core/i18n";
+import { useThemeColor } from "@/hooks/use-theme-color";
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useMemo, useState } from "react";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 
 // ====== 类型定义 ======
-
-type GroupStatus = 'finished' | 'ongoing';
+type GroupStatus = "finished" | "ongoing";
 
 type GroupMember = {
   id: string;
@@ -24,7 +20,7 @@ type GroupMember = {
   phone?: string;
   avatarColor: string;
   balance: number; // >0: owes; <0: should receive; 0: settled
-  source: 'search' | 'contacts' | 'qr';
+  source: "search" | "contacts" | "qr";
 };
 
 type GroupDetail = {
@@ -39,182 +35,199 @@ type GroupDetail = {
 };
 
 // ====== 假数据 ======
-
 const DEMO_GROUPS: Record<string, GroupDetail> = {
-  '1': {
-    id: '1',
-    name: 'Paris Trip 2022',
-    description: 'Spring trip to Paris with friends.',
-    startDate: '2022-04-12',
-    endDate: '2022-04-18',
-    status: 'finished',
+  "1": {
+    id: "1",
+    name: "Paris Trip 2022",
+    description: "Spring trip to Paris with friends.",
+    startDate: "2022-04-12",
+    endDate: "2022-04-18",
+    status: "finished",
     totalExpenses: 260,
     members: [
       {
-        id: 'me',
-        name: 'You',
-        email: 'you@example.com',
-        avatarColor: '#2563eb',
+        id: "me",
+        name: "You",
+        email: "you@example.com",
+        avatarColor: "#2563eb",
         balance: -60,
-        source: 'search',
+        source: "search",
       },
       {
-        id: 'bob',
-        name: 'Bob',
-        email: 'bob@example.com',
-        avatarColor: '#f97316',
+        id: "bob",
+        name: "Bob",
+        email: "bob@example.com",
+        avatarColor: "#f97316",
         balance: 30,
-        source: 'contacts',
+        source: "contacts",
       },
       {
-        id: 'alice',
-        name: 'Alice',
-        email: 'alice@example.com',
-        avatarColor: '#14b8a6',
+        id: "alice",
+        name: "Alice",
+        email: "alice@example.com",
+        avatarColor: "#14b8a6",
         balance: 30,
-        source: 'qr',
+        source: "qr",
       },
     ],
   },
-  '2': {
-    id: '2',
-    name: 'Roommates Bills 2023',
-    description: 'Monthly flat bills and shared groceries.',
-    startDate: '2023-01-01',
+  "2": {
+    id: "2",
+    name: "Roommates Bills 2023",
+    description: "Monthly flat bills and shared groceries.",
+    startDate: "2023-01-01",
     endDate: null,
-    status: 'ongoing',
+    status: "ongoing",
     totalExpenses: 1520,
     members: [
       {
-        id: 'me',
-        name: 'You',
-        avatarColor: '#2563eb',
+        id: "me",
+        name: "You",
+        avatarColor: "#2563eb",
         balance: 0,
-        source: 'search',
+        source: "search",
       },
       {
-        id: 'carol',
-        name: 'Carol',
-        avatarColor: '#22c55e',
+        id: "carol",
+        name: "Carol",
+        avatarColor: "#22c55e",
         balance: 80,
-        source: 'contacts',
+        source: "contacts",
       },
       {
-        id: 'dave',
-        name: 'Dave',
-        avatarColor: '#eab308',
+        id: "dave",
+        name: "Dave",
+        avatarColor: "#eab308",
         balance: -80,
-        source: 'search',
+        source: "search",
       },
     ],
   },
 };
 
-// ====== 新增：把要发的提醒内容封装成一个函数 ======
-function buildReminderText(group: GroupDetail, member: GroupMember) {
-  const amount = member.balance.toFixed(2);
-  return `Hi ${member.name}, you still owe ${amount} € in group “${group.name}”. Please check the balances and settle when you can 🙂`;
-}
-
+// ====== 文案/格式化工具 ======
 function formatDateRange(group: GroupDetail) {
-  if (!group.endDate) return `From ${group.startDate}`;
+  if (!group.endDate) return `${t("from")} ${group.startDate}`;
   return `${group.startDate} → ${group.endDate}`;
 }
 
-function formatBalance(b: number): { label: string; color: string } {
-  if (b > 0) return { label: `Owes ${b.toFixed(2)} €`, color: '#b91c1c' };
-  if (b < 0) return { label: `Should receive ${(-b).toFixed(2)} €`, color: '#15803d' };
-  return { label: 'Settled', color: '#6b7280' };
+function buildReminderText(group: GroupDetail, member: GroupMember) {
+  const amount = member.balance.toFixed(2);
+  return t("reminderMessageTemplate")
+    .replace("{name}", member.name)
+    .replace("{amount}", amount)
+    .replace("{group}", group.name);
+}
+
+function formatBalance(b: number) {
+  if (b > 0) return { key: "owes" as const, amount: b.toFixed(2) };
+  if (b < 0) return { key: "shouldReceive" as const, amount: (-b).toFixed(2) };
+  return { key: "settled" as const, amount: "" };
 }
 
 export default function GroupDetailScreen() {
-  const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  // ✅ 关键修复：groupId 可能是 string | string[] | undefined
+  const params = useLocalSearchParams<{ groupId?: string | string[] }>();
+  const groupIdParam = params.groupId;
 
-  const initialGroup =
-    (groupId && DEMO_GROUPS[groupId]) ?? DEMO_GROUPS['1'];
+  // ✅ 永远得到一个 string
+  const groupId: string =
+    typeof groupIdParam === "string"
+      ? groupIdParam
+      : Array.isArray(groupIdParam)
+      ? groupIdParam[0] ?? "1"
+      : "1";
+
+  // ✅ 永远是 GroupDetail（不会变 union）
+  const initialGroup: GroupDetail = DEMO_GROUPS[groupId] ?? DEMO_GROUPS["1"];
 
   const [members, setMembers] = useState<GroupMember[]>(initialGroup.members);
   const [invitePanelOpen, setInvitePanelOpen] = useState(false);
-  const [inviteMode, setInviteMode] = useState<'none' | 'search' | 'contacts' | 'qr'>('none');
+  const [inviteMode, setInviteMode] = useState<"none" | "search" | "contacts" | "qr">("none");
 
-  const outstandingMembers = members.filter((m) => m.balance > 0);
+  // 合成最新 group（含 members state）
+  const group: GroupDetail = useMemo(
+    () => ({
+      ...initialGroup,
+      members,
+    }),
+    [initialGroup, members]
+  );
 
-  // 把最新的 group（含当前 members state）合成出来，下面所有地方都用这个
-  const group: GroupDetail = {
-    ...initialGroup,
-    members,
-  };
+  const outstandingMembers = useMemo(() => members.filter((m) => m.balance > 0), [members]);
 
-  // ====== 修改 1：提醒单个成员，文案更像真实的消息 ======
+  // ====== 主题色 ======
+  const borderColor = useThemeColor({}, "border");
+  const cardColor = useThemeColor({}, "card");
+  const textColor = useThemeColor({}, "text");
+  const backgroundColor = useThemeColor({}, "background");
+  const primary = useThemeColor({}, "primary");
+  const muted = useThemeColor({}, "icon");
+
+  // 状态色（集中定义）
+  const danger = "#b91c1c";
+  const success = "#15803d";
+
+  // ====== Reminder 逻辑 ======
   const handleRemindMember = (member: GroupMember) => {
     const text = buildReminderText(group, member);
 
     Alert.alert(
-      'Send reminder (demo)',
-      `下面这段内容，在真正接后端的时候会发给 ${member.name}：\n\n${text}\n\n现在只是本地弹窗模拟。`,
+      t("sendReminderDemoTitle"),
+      t("sendReminderDemoBody").replace("{name}", member.name).replace("{text}", text)
     );
   };
 
-  // ====== 修改 2：提醒所有未付款成员，列出每个人欠多少 ======
   const handleRemindAll = () => {
     if (outstandingMembers.length === 0) {
-      Alert.alert('Everyone is settled', 'No one owes money right now.');
+      Alert.alert(t("everyoneSettledTitle"), t("everyoneSettledBody"));
       return;
     }
 
     const list = outstandingMembers
       .map((m) => `• ${m.name}: ${m.balance.toFixed(2)} €`)
-      .join('\n');
+      .join("\n");
 
-    Alert.alert(
-      'Send reminders (demo)',
-      `会给下面这些还没结清的人发提醒（真实 APP 里会写入消息 / 发通知）：\n\n${list}`,
-    );
+    Alert.alert(t("sendRemindersDemoTitle"), t("sendRemindersDemoBody").replace("{list}", list));
   };
 
   // 模拟从“搜索 / 通讯录 / 扫码”加人
-  const addMemberFromDemo = (
-    who: 'bob' | 'alice' | 'tom',
-    source: 'search' | 'contacts' | 'qr',
-  ) => {
+  const addMemberFromDemo = (who: "bob" | "alice" | "tom", source: "search" | "contacts" | "qr") => {
     const exists = members.some((m) => m.id === who);
     if (exists) {
-      Alert.alert('Already a member', 'This person is already in the group.');
+      Alert.alert(t("alreadyMemberTitle"), t("alreadyMemberBody"));
       return;
     }
 
     const demoMap: Record<typeof who, GroupMember> = {
       bob: {
-        id: 'bob',
-        name: 'Bob',
-        email: 'bob@example.com',
-        avatarColor: '#f97316',
+        id: "bob",
+        name: "Bob",
+        email: "bob@example.com",
+        avatarColor: "#f97316",
         balance: 20,
         source,
       },
       alice: {
-        id: 'alice',
-        name: 'Alice',
-        email: 'alice@example.com',
-        avatarColor: '#14b8a6',
+        id: "alice",
+        name: "Alice",
+        email: "alice@example.com",
+        avatarColor: "#14b8a6",
         balance: 0,
         source,
       },
       tom: {
-        id: 'tom',
-        name: 'Tom',
-        phone: '+39 123 456',
-        avatarColor: '#a855f7',
+        id: "tom",
+        name: "Tom",
+        phone: "+39 123 456",
+        avatarColor: "#a855f7",
         balance: 15,
         source,
       },
     };
 
     setMembers((prev) => [...prev, demoMap[who]]);
-    Alert.alert(
-      'Member added (demo)',
-      `${demoMap[who].name} has been added to this group.`,
-    );
+    Alert.alert(t("memberAddedTitle"), t("memberAddedBody").replace("{name}", demoMap[who].name));
   };
 
   return (
@@ -228,51 +241,50 @@ export default function GroupDetailScreen() {
 
       {/* 基本信息 */}
       <ThemedText style={styles.dateText}>
-        {formatDateRange(group)} · {group.members.length} members
+        {formatDateRange(group)} · {group.members.length} {t("members")}
       </ThemedText>
+
       <ThemedText style={styles.totalText}>
-        Total expenses: {group.totalExpenses.toFixed(2)} €
+        {t("totalExpenses")}: {group.totalExpenses.toFixed(2)} €
       </ThemedText>
-      {group.description && (
-        <ThemedText style={styles.description}>{group.description}</ThemedText>
-      )}
+
+      {!!group.description && <ThemedText style={styles.description}>{group.description}</ThemedText>}
 
       <View style={{ height: 12 }} />
 
-      {/* 成员 + Reminder */}
+      {/* Members */}
       <ThemedText type="subtitle" style={styles.sectionTitle}>
-        Members
+        {t("membersTitle")}
       </ThemedText>
 
-      <ThemedView style={styles.membersCard}>
+      <ThemedView style={[styles.membersCard, { borderColor, backgroundColor: cardColor }]}>
         {members.map((m) => {
-          const { label, color } = formatBalance(m.balance);
+          const info = formatBalance(m.balance);
+          const label =
+            info.key === "settled"
+              ? t("settled")
+              : info.key === "owes"
+              ? t("owesAmount").replace("{amount}", info.amount)
+              : t("shouldReceiveAmount").replace("{amount}", info.amount);
+
+          const color = info.key === "owes" ? danger : info.key === "shouldReceive" ? success : muted;
+
           return (
             <View key={m.id} style={styles.memberRow}>
               <View style={styles.memberLeft}>
-                <View
-                  style={[styles.avatar, { backgroundColor: m.avatarColor }]}
-                >
-                  <ThemedText style={styles.avatarText}>
-                    {m.name.charAt(0).toUpperCase()}
-                  </ThemedText>
+                <View style={[styles.avatar, { backgroundColor: m.avatarColor }]}>
+                  <ThemedText style={styles.avatarText}>{m.name.charAt(0).toUpperCase()}</ThemedText>
                 </View>
+
                 <View style={{ gap: 2 }}>
                   <ThemedText type="defaultSemiBold">{m.name}</ThemedText>
-                  <ThemedText style={[styles.balanceText, { color }]}>
-                    {label}
-                  </ThemedText>
+                  <ThemedText style={[styles.balanceText, { color }]}>{label}</ThemedText>
                 </View>
               </View>
 
               {m.balance > 0 && (
-                <Pressable
-                  onPress={() => handleRemindMember(m)}
-                  style={styles.remindButton}
-                >
-                  <ThemedText style={styles.remindButtonText}>
-                    Remind
-                  </ThemedText>
+                <Pressable onPress={() => handleRemindMember(m)} style={[styles.remindButton, { borderColor: danger }]}>
+                  <ThemedText style={[styles.remindButtonText, { color: danger }]}>{t("remind")}</ThemedText>
                 </Pressable>
               )}
             </View>
@@ -280,103 +292,102 @@ export default function GroupDetailScreen() {
         })}
 
         <View style={styles.membersFooter}>
-          <Pressable
-            onPress={handleRemindAll}
-            style={styles.remindAllButton}
-          >
-            <Ionicons name="notifications-outline" size={16} />
-            <ThemedText style={styles.remindAllText}>
-              Remind all who still owe
-            </ThemedText>
+          <Pressable onPress={handleRemindAll} style={styles.remindAllButton}>
+            <Ionicons name="notifications-outline" size={16} color={textColor} />
+            <ThemedText style={styles.remindAllText}>{t("remindAllWhoOwe")}</ThemedText>
           </Pressable>
         </View>
       </ThemedView>
 
       <View style={{ height: 16 }} />
 
-      {/* 邀请区块：搜索 / 通讯录 / QR */}
+      {/* Invite */}
       <ThemedText type="subtitle" style={styles.sectionTitle}>
-        Invite people
+        {t("invitePeople")}
       </ThemedText>
 
-      <ThemedView style={styles.inviteCard}>
-        <ThemedText style={styles.inviteHint}>
-          Add friends by searching account, using phone contacts, or showing a
-          QR code. This is a demo UI (no real backend yet).
-        </ThemedText>
+      <ThemedView style={[styles.inviteCard, { borderColor, backgroundColor: cardColor }]}>
+        <ThemedText style={styles.inviteHint}>{t("inviteHint")}</ThemedText>
 
         <View style={styles.inviteButtonsRow}>
           <InviteButton
-            label="Search account"
+            label={t("searchAccount")}
             icon="search-outline"
-            active={inviteMode === 'search'}
+            active={inviteMode === "search"}
             onPress={() => {
               setInvitePanelOpen(true);
-              setInviteMode('search');
+              setInviteMode("search");
             }}
+            borderColor={borderColor}
+            cardColor={cardColor}
+            primary={primary}
+            textColor={textColor}
+            backgroundColor={backgroundColor}
           />
           <InviteButton
-            label="From contacts"
+            label={t("fromContacts")}
             icon="people-circle-outline"
-            active={inviteMode === 'contacts'}
+            active={inviteMode === "contacts"}
             onPress={() => {
               setInvitePanelOpen(true);
-              setInviteMode('contacts');
+              setInviteMode("contacts");
             }}
+            borderColor={borderColor}
+            cardColor={cardColor}
+            primary={primary}
+            textColor={textColor}
+            backgroundColor={backgroundColor}
           />
           <InviteButton
-            label="Show QR"
+            label={t("showQR")}
             icon="qr-code-outline"
-            active={inviteMode === 'qr'}
+            active={inviteMode === "qr"}
             onPress={() => {
               setInvitePanelOpen(true);
-              setInviteMode('qr');
+              setInviteMode("qr");
             }}
+            borderColor={borderColor}
+            cardColor={cardColor}
+            primary={primary}
+            textColor={textColor}
+            backgroundColor={backgroundColor}
           />
         </View>
 
-        {invitePanelOpen && inviteMode === 'search' && (
+        {invitePanelOpen && inviteMode === "search" && (
           <InvitePanel
-            title="Search accounts (demo)"
-            hint="In real app, search backend by email / username. Here we use demo users:"
+            title={t("searchAccountsDemoTitle")}
+            hint={t("searchAccountsDemoHint")}
+            borderColor={borderColor}
+            cardColor={cardColor}
           >
-            <DemoInviteRow
-              label="Bob · bob@example.com"
-              onPress={() => addMemberFromDemo('bob', 'search')}
-            />
-            <DemoInviteRow
-              label="Alice · alice@example.com"
-              onPress={() => addMemberFromDemo('alice', 'search')}
-            />
+            <DemoInviteRow label={`Bob · bob@example.com`} onPress={() => addMemberFromDemo("bob", "search")} textColor={textColor} />
+            <DemoInviteRow label={`Alice · alice@example.com`} onPress={() => addMemberFromDemo("alice", "search")} textColor={textColor} />
           </InvitePanel>
         )}
 
-        {invitePanelOpen && inviteMode === 'contacts' && (
+        {invitePanelOpen && inviteMode === "contacts" && (
           <InvitePanel
-            title="From phone contacts (demo)"
-            hint="Later: use expo-contacts to read real contacts. Now: simulate a few."
+            title={t("fromContactsDemoTitle")}
+            hint={t("fromContactsDemoHint")}
+            borderColor={borderColor}
+            cardColor={cardColor}
           >
-            <DemoInviteRow
-              label="Tom · +39 123 456"
-              onPress={() => addMemberFromDemo('tom', 'contacts')}
-            />
-            <DemoInviteRow
-              label="Bob · +39 987 654"
-              onPress={() => addMemberFromDemo('bob', 'contacts')}
-            />
+            <DemoInviteRow label={`Tom · +39 123 456`} onPress={() => addMemberFromDemo("tom", "contacts")} textColor={textColor} />
+            <DemoInviteRow label={`Bob · +39 987 654`} onPress={() => addMemberFromDemo("bob", "contacts")} textColor={textColor} />
           </InvitePanel>
         )}
 
-        {invitePanelOpen && inviteMode === 'qr' && (
+        {invitePanelOpen && inviteMode === "qr" && (
           <InvitePanel
-            title="QR code (demo)"
-            hint="Later: generate a join link for this group and turn it into a QR code. Others scan to join."
+            title={t("qrDemoTitle")}
+            hint={t("qrDemoHint")}
+            borderColor={borderColor}
+            cardColor={cardColor}
           >
-            <View style={styles.qrPlaceholder}>
-              <Ionicons name="qr-code-outline" size={48} />
-              <ThemedText style={{ marginTop: 4 }}>
-                QR code preview
-              </ThemedText>
+            <View style={[styles.qrPlaceholder, { borderColor, backgroundColor: cardColor }]}>
+              <Ionicons name="qr-code-outline" size={48} color={textColor} />
+              <ThemedText style={{ marginTop: 4 }}>{t("qrPreview")}</ThemedText>
             </View>
           </InvitePanel>
         )}
@@ -386,10 +397,10 @@ export default function GroupDetailScreen() {
             <Pressable
               onPress={() => {
                 setInvitePanelOpen(false);
-                setInviteMode('none');
+                setInviteMode("none");
               }}
             >
-              <ThemedText style={styles.closeInviteText}>Close</ThemedText>
+              <ThemedText style={styles.closeInviteText}>{t("close")}</ThemedText>
             </Pressable>
           </View>
         )}
@@ -397,35 +408,50 @@ export default function GroupDetailScreen() {
 
       <View style={{ height: 16 }} />
 
-      {/* 占位：以后放真实的 expenses 列表 */}
+      {/* Expenses placeholder */}
       <ThemedText type="subtitle" style={styles.sectionTitle}>
-        Expenses (to be implemented)
+        {t("expensesTodoTitle")}
       </ThemedText>
-      <ThemedText>
-        Here you can later plug your real expense list and AA calculation.
-      </ThemedText>
+      <ThemedText>{t("expensesTodoBody")}</ThemedText>
     </AppScreen>
   );
 }
 
-// 小组件：邀请按钮、面板、Demo 行
+// ===== 小组件 =====
 type InviteButtonProps = {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   active: boolean;
   onPress: () => void;
+  borderColor: string;
+  cardColor: string;
+  primary: string;
+  textColor: string;
+  backgroundColor: string;
 };
 
-function InviteButton({ label, icon, active, onPress }: InviteButtonProps) {
+function InviteButton({
+  label,
+  icon,
+  active,
+  onPress,
+  borderColor,
+  cardColor,
+  primary,
+  textColor,
+  backgroundColor,
+}: InviteButtonProps) {
+  const activeBg = backgroundColor;
   return (
     <Pressable
       style={[
         styles.inviteButton,
-        active && styles.inviteButtonActive,
+        { borderColor, backgroundColor: cardColor },
+        active && { borderColor: primary, backgroundColor: activeBg },
       ]}
       onPress={onPress}
     >
-      <Ionicons name={icon} size={16} />
+      <Ionicons name={icon} size={16} color={textColor} />
       <ThemedText>{label}</ThemedText>
     </Pressable>
   );
@@ -435,11 +461,13 @@ type InvitePanelProps = {
   title: string;
   hint: string;
   children: React.ReactNode;
+  borderColor: string;
+  cardColor: string;
 };
 
-function InvitePanel({ title, hint, children }: InvitePanelProps) {
+function InvitePanel({ title, hint, children, borderColor, cardColor }: InvitePanelProps) {
   return (
-    <ThemedView style={styles.invitePanel}>
+    <ThemedView style={[styles.invitePanel, { borderColor, backgroundColor: cardColor }]}>
       <ThemedText style={styles.invitePanelTitle}>{title}</ThemedText>
       <ThemedText style={styles.invitePanelHint}>{hint}</ThemedText>
       {children}
@@ -450,18 +478,19 @@ function InvitePanel({ title, hint, children }: InvitePanelProps) {
 type DemoInviteRowProps = {
   label: string;
   onPress: () => void;
+  textColor: string;
 };
 
-function DemoInviteRow({ label, onPress }: DemoInviteRowProps) {
+function DemoInviteRow({ label, onPress, textColor }: DemoInviteRowProps) {
   return (
     <Pressable onPress={onPress} style={styles.demoInviteRow}>
       <ThemedText>{label}</ThemedText>
-      <Ionicons name="add-circle-outline" size={20} />
+      <Ionicons name="add-circle-outline" size={20} color={textColor} />
     </Pressable>
   );
 }
 
-// 样式
+// ===== 样式 =====
 const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
@@ -470,7 +499,7 @@ const styles = StyleSheet.create({
   totalText: {
     marginTop: 4,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   description: {
     marginTop: 4,
@@ -481,23 +510,23 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
+
   membersCard: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
     padding: 10,
     gap: 8,
   },
   memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
     paddingVertical: 4,
   },
   memberLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     flex: 1,
   },
@@ -505,12 +534,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
     fontSize: 14,
-    color: 'white',
+    color: "white",
   },
   balanceText: {
     fontSize: 12,
@@ -520,28 +549,26 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#b91c1c',
   },
   remindButtonText: {
     fontSize: 12,
-    color: '#b91c1c',
   },
   membersFooter: {
     marginTop: 4,
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
   },
   remindAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   remindAllText: {
     fontSize: 12,
   },
+
   inviteCard: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
     padding: 10,
     gap: 8,
   },
@@ -550,34 +577,28 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   inviteButtonsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   inviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  inviteButtonActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#2563eb',
   },
   invitePanel: {
     marginTop: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     padding: 8,
     gap: 6,
   },
   invitePanelTitle: {
-    fontWeight: '600',
+    fontWeight: "600",
     fontSize: 13,
   },
   invitePanelHint: {
@@ -588,24 +609,23 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
     padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 4,
   },
   invitePanelFooter: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
     marginTop: 4,
   },
   closeInviteText: {
     fontSize: 12,
-    textDecorationLine: 'underline',
+    textDecorationLine: "underline",
   },
   demoInviteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 4,
   },
 });

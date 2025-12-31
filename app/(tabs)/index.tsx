@@ -1,34 +1,28 @@
 // app/(tabs)/index.tsx
-
-import type {
-  ExpenseType,
-  Group,
-  GroupStatus,
-} from "@/components/group/GroupCard"; // 现在只拿类型，不再用里面的 UI 组件
-
-// Extended Group type with members array
-type GroupWithMembers = Group & {
-  members: Array<{ id: string; name: string; avatarColor: string; isOwner?: boolean }>;
-  ownerId?: string; // 新增：允许对象包含 ownerId
-};
-
-
+import type { ExpenseType, Group, GroupStatus } from "@/components/group/GroupCard"; // 只拿类型
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
+import { t } from "@/core/i18n";
+import { useThemeColor } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+
+// Extended Group type with members array
+type GroupWithMembers = Group & {
+  members: Array<{ id: string; name: string; avatarColor: string; isOwner?: boolean }>;
+  ownerId?: string;
+};
 
 // ========== 筛选类型 ==========
 type TimeFilter = "all" | "lastYear" | "older";
 type StatusFilter = "all" | GroupStatus;
 type TypeFilter = "all" | ExpenseType;
 
-// ========== 假数据：跨 3 年的旅游 / 购物记录 ==========
-// 注意：这里的结构是 Group 类型 + ownerId + members
+// ========== 假数据 ==========
 const demoGroups: GroupWithMembers[] = [
   {
     id: "1",
@@ -133,70 +127,74 @@ const demoGroups: GroupWithMembers[] = [
   },
 ];
 
-// ========== 把类型值变成人话标签 ==========
-function formatTypeLabel(type: ExpenseType | string): string {
+// ========== 类型标签 i18n ==========
+function typeKey(type: ExpenseType | string) {
   switch (type) {
     case "travel":
-      return "Travel";
+      return "typeTravel";
     case "food":
-      return "Food & drinks";
+      return "typeFoodDrinks";
     case "shopping":
-      return "Shopping";
+      return "typeShopping";
     case "transport":
-      return "Transport";
+      return "typeTransport";
     case "household":
-      return "Household";
+      return "typeHousehold";
     case "other":
-      return "Other";
+      return "typeOther";
     default:
-      return String(type);
+      return "typeOther";
   }
 }
 
-// ========== 单个 Group 卡片（包含：状态 + 群主头像 + 左下角一排头像） ==========
-function GroupCardLocal({ group }: { group: GroupWithMembers }) {
+// ========== 单个 Group 卡片 ==========
+function GroupCardLocal({
+  group,
+  borderColor,
+  cardColor,
+  muted,
+  textColor,
+}: {
+  group: GroupWithMembers;
+  borderColor: string;
+  cardColor: string;
+  muted: string;
+  textColor: string;
+}) {
   const isFinished = group.status === "finished";
 
   const owner =
-    group.members?.find((m) => m.isOwner) ??
-    group.members?.find((m) => m.id === group.ownerId);
+    group.members?.find((m) => m.isOwner) ?? group.members?.find((m) => m.id === group.ownerId);
 
-  const typesLabels = (group.types || []).map(formatTypeLabel).join(" · ");
+  const typesLabels = (group.types || []).map((tp) => t(typeKey(tp))).join(" · ");
 
   return (
     <Pressable onPress={() => router.push(`/group/${group.id}`)}>
-      <ThemedView style={styles.card}>
+      <ThemedView style={[styles.card, { borderColor, backgroundColor: cardColor }]}>
         {/* 第一行：状态 + 日期 */}
         <View style={styles.cardHeaderRow}>
           <View
             style={[
               styles.statusPill,
-              isFinished ? styles.statusFinished : styles.statusOngoing,
+              { backgroundColor: isFinished ? cardColor : cardColor },
             ]}
           >
-            <ThemedText
-              style={isFinished ? styles.statusTextFinished : styles.statusTextOngoing}
-            >
-              {isFinished ? "Finished" : "Not Finished"}
+            <ThemedText style={[styles.statusText, { color: isFinished ? muted : textColor }]}>
+              {isFinished ? t("finished") : t("notFinished")}
             </ThemedText>
           </View>
 
           <ThemedText style={styles.dateText}>
             {group.endDate
               ? `${group.startDate}  →  ${group.endDate}`
-              : `From ${group.startDate}`}
+              : `${t("from")} ${group.startDate}`}
           </ThemedText>
         </View>
 
         {/* 第二行：群主头像 + 标题 */}
         <View style={styles.titleRow}>
           {owner && (
-            <View
-              style={[
-                styles.ownerAvatar,
-                { backgroundColor: owner.avatarColor || "#9ca3af" },
-              ]}
-            >
+            <View style={[styles.ownerAvatar, { backgroundColor: owner.avatarColor || muted }]}>
               <ThemedText style={styles.ownerAvatarText}>
                 {owner.name.charAt(0).toUpperCase()}
               </ThemedText>
@@ -210,25 +208,19 @@ function GroupCardLocal({ group }: { group: GroupWithMembers }) {
 
         {/* 第三行：成员数量 + 总金额 */}
         <ThemedText style={styles.membersLine}>
-          {group.membersCount} members · {group.totalExpenses.toFixed(2)} €
+          {group.membersCount} {t("members")} · {group.totalExpenses.toFixed(2)} €
         </ThemedText>
 
         {/* 第四行：消费类型 */}
-        {!!typesLabels && (
-          <ThemedText style={styles.categoriesLine}>{typesLabels}</ThemedText>
-        )}
+        {!!typesLabels && <ThemedText style={styles.categoriesLine}>{typesLabels}</ThemedText>}
 
-        {/* 第五行：左下角成员头像一排 + 右侧提示文字 */}
+        {/* 第五行：头像一排 + 提示 */}
         <View style={styles.bottomRow}>
-          {/* 左下角：所有参与成员的头像 */}
           <View style={styles.avatarsRow}>
             {group.members?.map((m) => (
               <View
                 key={m.id}
-                style={[
-                  styles.smallAvatar,
-                  { backgroundColor: m.avatarColor || "#9ca3af" },
-                ]}
+                style={[styles.smallAvatar, { backgroundColor: m.avatarColor || muted }]}
               >
                 <ThemedText style={styles.smallAvatarText}>
                   {m.name.charAt(0).toUpperCase()}
@@ -237,22 +229,26 @@ function GroupCardLocal({ group }: { group: GroupWithMembers }) {
             ))}
           </View>
 
-          {/* 右边提示 */}
-          <ThemedText style={styles.tapHint}>
-            Tap to see balances and expenses
-          </ThemedText>
+          <ThemedText style={styles.tapHint}>{t("tapToSeeBalances")}</ThemedText>
         </View>
       </ThemedView>
     </Pressable>
   );
 }
 
-// ========== 页面组件：包含 Filter + 列表 ==========
+// ========== 页面组件 ==========
 export default function GroupsScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+
+  // theme colors
+  const borderColor = useThemeColor({}, "border");
+  const cardColor = useThemeColor({}, "card");
+  const textColor = useThemeColor({}, "text");
+  const muted = useThemeColor({}, "icon");
+  const primary = useThemeColor({}, "primary");
 
   const filteredGroups = useMemo(() => {
     const now = new Date();
@@ -260,198 +256,226 @@ export default function GroupsScreen() {
 
     return demoGroups
       .filter((g) => {
-        // 时间筛选
         if (timeFilter !== "all") {
           const startMs = new Date(g.startDate).getTime();
           const diff = now.getTime() - startMs;
           if (timeFilter === "lastYear") {
-            if (diff > ONE_YEAR_MS || diff < 0) {
-              return false;
-            }
+            if (diff > ONE_YEAR_MS || diff < 0) return false;
           } else if (timeFilter === "older") {
-            if (diff <= ONE_YEAR_MS) {
-              return false;
-            }
+            if (diff <= ONE_YEAR_MS) return false;
           }
         }
 
-        // 状态筛选
-        if (statusFilter !== "all" && g.status !== statusFilter) {
-          return false;
-        }
+        if (statusFilter !== "all" && g.status !== statusFilter) return false;
 
-        // 类型筛选
-        if (typeFilter !== "all" && !g.types.includes(typeFilter)) {
-          return false;
-        }
+        if (typeFilter !== "all" && !g.types.includes(typeFilter)) return false;
 
         return true;
       })
       .slice()
-      .sort((a, b) => {
-        // 时间越早越靠前
-        const aMs = new Date(a.startDate).getTime();
-        const bMs = new Date(b.startDate).getTime();
-        return aMs - bMs;
-      });
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
   }, [timeFilter, statusFilter, typeFilter]);
 
   return (
     <AppScreen>
       <AppTopBar
-        title="My Groups"
+        title={t("myGroups")}
         rightIconName="chatbubbles-outline"
         onRightIconPress={() => router.push("/friends")}
       />
 
-      <ThemedText>
-        Create a group for each trip or set of friends, then add expenses.
-      </ThemedText>
+      <ThemedText>{t("groupsIntro")}</ThemedText>
 
-      {/* 顶部 Filter 按钮 */}
+      {/* Filter 按钮 */}
       <View style={styles.filterToggleRow}>
         <Pressable
-          style={styles.filterButton}
+          style={[styles.filterButton, { borderColor, backgroundColor: cardColor }]}
           onPress={() => setShowFilters((prev) => !prev)}
         >
-          <Ionicons name="filter-outline" size={16} />
+          <Ionicons name="filter-outline" size={16} color={textColor} />
           <ThemedText style={styles.filterButtonText}>
-            {showFilters ? "Hide filters" : "Show filters"}
+            {showFilters ? t("hideFilters") : t("showFilters")}
           </ThemedText>
         </Pressable>
       </View>
 
       {/* Filter 面板 */}
       {showFilters && (
-        <ThemedView style={styles.filterPanel}>
-          {/* 时间筛选 */}
+        <ThemedView style={[styles.filterPanel, { borderColor, backgroundColor: cardColor }]}>
+          {/* Time */}
           <ThemedText type="defaultSemiBold" style={styles.filterTitle}>
-            Time
+            {t("time")}
           </ThemedText>
           <View style={styles.chipRow}>
             <FilterChip
-              label="All"
+              label={t("all")}
               active={timeFilter === "all"}
               onPress={() => setTimeFilter("all")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Last 12 months"
+              label={t("last12Months")}
               active={timeFilter === "lastYear"}
               onPress={() => setTimeFilter("lastYear")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Older than 1 year"
+              label={t("olderThan1Year")}
               active={timeFilter === "older"}
               onPress={() => setTimeFilter("older")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
           </View>
 
-          {/* 完成状态筛选 */}
+          {/* Status */}
           <ThemedText type="defaultSemiBold" style={styles.filterTitle}>
-            Status
+            {t("status")}
           </ThemedText>
           <View style={styles.chipRow}>
             <FilterChip
-              label="All"
+              label={t("all")}
               active={statusFilter === "all"}
               onPress={() => setStatusFilter("all")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Finished"
+              label={t("finished")}
               active={statusFilter === "finished"}
               onPress={() => setStatusFilter("finished")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Not finished"
+              label={t("notFinished")}
               active={statusFilter === "ongoing"}
               onPress={() => setStatusFilter("ongoing")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
           </View>
 
-          {/* 消费类型筛选 */}
+          {/* Expense type */}
           <ThemedText type="defaultSemiBold" style={styles.filterTitle}>
-            Expense type
+            {t("expenseType")}
           </ThemedText>
           <View style={styles.chipRow}>
             <FilterChip
-              label="All"
+              label={t("all")}
               active={typeFilter === "all"}
               onPress={() => setTypeFilter("all")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Travel"
+              label={t("typeTravel")}
               active={typeFilter === "travel"}
               onPress={() => setTypeFilter("travel")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Food & drinks"
+              label={t("typeFoodDrinks")}
               active={typeFilter === "food"}
               onPress={() => setTypeFilter("food")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Shopping"
+              label={t("typeShopping")}
               active={typeFilter === "shopping"}
               onPress={() => setTypeFilter("shopping")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Transport"
+              label={t("typeTransport")}
               active={typeFilter === "transport"}
               onPress={() => setTypeFilter("transport")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Household"
+              label={t("typeHousehold")}
               active={typeFilter === "household"}
               onPress={() => setTypeFilter("household")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
             <FilterChip
-              label="Other"
+              label={t("typeOther")}
               active={typeFilter === "other"}
               onPress={() => setTypeFilter("other")}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              primary={primary}
             />
           </View>
         </ThemedView>
       )}
 
-      {/* 分割线 */}
       <View style={{ height: 8 }} />
 
-      {/* Group 列表：用我们自己写的 GroupCardLocal */}
       {filteredGroups.map((g) => (
-        <GroupCardLocal key={g.id} group={g} />
+        <GroupCardLocal
+          key={g.id}
+          group={g}
+          borderColor={borderColor}
+          cardColor={cardColor}
+          muted={muted}
+          textColor={textColor}
+        />
       ))}
 
-      {filteredGroups.length === 0 && (
-        <ThemedText>No groups match current filters.</ThemedText>
-      )}
+      {filteredGroups.length === 0 && <ThemedText>{t("noGroupsMatch")}</ThemedText>}
 
       <View style={{ height: 16 }} />
     </AppScreen>
   );
 }
 
-// ========== 小小的 Chip 组件，用来当筛选按钮 ==========
+// ========== Chip ==========
 interface FilterChipProps {
   label: string;
   active: boolean;
   onPress: () => void;
+  borderColor: string;
+  cardColor: string;
+  primary: string;
 }
 
-function FilterChip({ label, active, onPress }: FilterChipProps) {
+function FilterChip({ label, active, onPress, borderColor, cardColor, primary }: FilterChipProps) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
+      style={[
+        styles.chip,
+        { borderColor, backgroundColor: cardColor },
+        active && { backgroundColor: primary, borderColor: primary },
+      ]}
     >
-      <ThemedText style={active ? styles.chipTextActive : styles.chipText}>
-        {label}
-      </ThemedText>
+      <ThemedText style={active ? styles.chipTextActive : styles.chipText}>{label}</ThemedText>
     </Pressable>
   );
 }
 
 // ========== 样式 ==========
 const styles = StyleSheet.create({
-  // —— Filter 一堆保持不变 ——
   filterToggleRow: {
     marginTop: 8,
     marginBottom: 4,
@@ -466,7 +490,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#ddd",
   },
   filterButtonText: {
     fontSize: 13,
@@ -474,7 +497,6 @@ const styles = StyleSheet.create({
   filterPanel: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#ddd",
     padding: 10,
     gap: 4,
   },
@@ -493,11 +515,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  chipActive: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
   },
   chipText: {
     fontSize: 12,
@@ -507,11 +524,9 @@ const styles = StyleSheet.create({
     color: "white",
   },
 
-  // —— Group 卡片相关样式（新增的） ——
   card: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
     padding: 12,
     marginBottom: 12,
     gap: 6,
@@ -526,19 +541,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-  statusFinished: {
-    backgroundColor: "#f3f4f6",
-  },
-  statusOngoing: {
-    backgroundColor: "#fee2e2",
-  },
-  statusTextFinished: {
+  statusText: {
     fontSize: 11,
-    color: "#6b7280",
-  },
-  statusTextOngoing: {
-    fontSize: 11,
-    color: "#b91c1c",
   },
   dateText: {
     fontSize: 11,
