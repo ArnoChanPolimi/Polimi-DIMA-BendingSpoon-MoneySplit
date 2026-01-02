@@ -1,86 +1,107 @@
 // app/(tabs)/quick-add.tsx
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import AppScreen from '@/components/ui/AppScreen';
-import AppTopBar from '@/components/ui/AppTopBar';
-import PrimaryButton from '@/components/ui/PrimaryButton';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ThemedText } from "@/components/themed-text";
+import ThemedTextInput from "@/components/themed-text-input";
+import { ThemedView } from "@/components/themed-view";
+import AppScreen from "@/components/ui/AppScreen";
+import AppTopBar from "@/components/ui/AppTopBar";
+import PrimaryButton from "@/components/ui/PrimaryButton";
+import { t } from "@/core/i18n";
+import { useThemeColor } from "@/hooks/use-theme-color";
+import { useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 export default function QuickAddScreen() {
-  const [groupName, setGroupName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
+  const [groupName, setGroupName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
 
-  // 这里先用假数据，后面可以用真正的好友列表
-  const demoFriends = ['Bob', 'Alice', 'Tom', 'Carol'];
-  const [selected, setSelected] = useState<string[]>(['You']);
+  const demoFriends = useMemo(() => ["Bob", "Alice", "Tom", "Carol"], []);
 
-  const toggleFriend = (name: string) => {
+  // ✅ 用稳定 id
+  const [selected, setSelected] = useState<string[]>(["you"]);
+
+  const toggleFriend = (id: string) => {
     setSelected((prev) =>
-      prev.includes(name)
-        ? prev.filter((n) => n !== name)
-        : [...prev, name],
+      prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id]
     );
   };
 
+  // ✅ 主题色只算一次（不在每个 Chip 里算）
+  const borderColor = useThemeColor({}, "border");
+  const cardColor = useThemeColor({}, "card");
+
+  // 选中态颜色（保持你原有设计）
+  const selectedBg = "#2563eb";
+  const selectedBorder = "#2563eb";
+
+  const peopleText = selected
+    .map((id) => (id === "you" ? t("you") : id))
+    .join(", ");
+
   return (
     <AppScreen>
-      <AppTopBar title="New expense" />
+      <AppTopBar title={t("newExpense")} />
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Step 1: 这次账单叫什么 */}
-        <ThemedText type="subtitle">1 · Give this expense a name</ThemedText>
-        <TextInput
+        {/* Step 1 */}
+        <ThemedText type="subtitle">{t("step1Title")}</ThemedText>
+        <ThemedTextInput
           style={styles.input}
-          placeholder="e.g. Dinner at Milano"
+          placeholder={t("expenseNamePlaceholder")}
           value={groupName}
           onChangeText={setGroupName}
         />
 
-        {/* Step 2: 谁参加了（好友选择） */}
+        {/* Step 2 */}
         <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          2 · Who is involved?
+          {t("step2Title")}
         </ThemedText>
-        <ThemedText style={styles.hint}>
-          Later, this will come from your friends list / contacts. For now it is demo data.
-        </ThemedText>
+        <ThemedText style={styles.hint}>{t("step2Hint")}</ThemedText>
 
         <View style={styles.chipRow}>
           <Chip
-            label="You"
-            selected={selected.includes('You')}
-            onPress={() => toggleFriend('You')}
+            label={t("you")}
+            selected={selected.includes("you")}
+            onPress={() => toggleFriend("you")}
+            borderColor={borderColor}
+            cardColor={cardColor}
+            selectedBg={selectedBg}
+            selectedBorder={selectedBorder}
           />
+
           {demoFriends.map((name) => (
             <Chip
               key={name}
               label={name}
               selected={selected.includes(name)}
               onPress={() => toggleFriend(name)}
+              borderColor={borderColor}
+              cardColor={cardColor}
+              selectedBg={selectedBg}
+              selectedBorder={selectedBorder}
             />
           ))}
         </View>
 
-        {/* Step 3: 金额 */}
+        {/* Step 3 */}
         <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          3 · Total amount
+          {t("step3Title")}
         </ThemedText>
-        <TextInput
+        <ThemedTextInput
           style={styles.input}
-          placeholder="e.g. 120"
+          placeholder={t("amountPlaceholder")}
           value={amount}
           onChangeText={setAmount}
           keyboardType="numeric"
         />
 
-        {/* 可选备注 */}
+        {/* Notes */}
         <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          Optional · Notes
+          {t("notesOptionalTitle")}
         </ThemedText>
-        <TextInput
-          style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-          placeholder="Anything you want to remember about this expense"
+        <ThemedTextInput
+          style={[styles.input, { height: 80, textAlignVertical: "top" }]}
+          placeholder={t("notesPlaceholder")}
           value={note}
           onChangeText={setNote}
           multiline
@@ -89,13 +110,13 @@ export default function QuickAddScreen() {
         <View style={{ height: 24 }} />
 
         <PrimaryButton
-          title="Save (demo)"
+          label={t("saveDemo")}
           onPress={() => {
-            // 现在先不连数据库，弹个提示就行
-            alert(
-              `Demo:\nName: ${groupName}\nAmount: ${amount}\nPeople: ${selected.join(
-                ', ',
-              )}`,
+            Alert.alert(
+              t("demoAlertTitle"),
+              `${t("demoAlertName")}: ${groupName}\n${t("demoAlertAmount")}: ${amount}\n${t(
+                "demoAlertPeople"
+              )}: ${peopleText}`
             );
           }}
         />
@@ -104,29 +125,42 @@ export default function QuickAddScreen() {
   );
 }
 
-// 小组件：好友选择 chip
+// 小组件：好友选择 chip（纯组件，不用 hook）
 type ChipProps = {
   label: string;
   selected: boolean;
   onPress: () => void;
+  borderColor: string;
+  cardColor: string;
+  selectedBg: string;
+  selectedBorder: string;
 };
 
-function Chip({ label, selected, onPress }: ChipProps) {
+function Chip({
+  label,
+  selected,
+  onPress,
+  borderColor,
+  cardColor,
+  selectedBg,
+  selectedBorder,
+}: ChipProps) {
   return (
-    <ThemedView
-      as={View}
-      style={[
-        styles.chip,
-        selected && styles.chipSelected,
-      ]}
-    >
-      <ThemedText
-        onPress={onPress}
-        style={selected ? styles.chipTextSelected : undefined}
+    <Pressable onPress={onPress}>
+      <ThemedView
+        style={[
+          styles.chip,
+          {
+            borderColor: selected ? selectedBorder : borderColor,
+            backgroundColor: selected ? selectedBg : cardColor,
+          },
+        ]}
       >
-        {label}
-      </ThemedText>
-    </ThemedView>
+        <ThemedText style={selected ? styles.chipTextSelected : undefined}>
+          {label}
+        </ThemedText>
+      </ThemedView>
+    </Pressable>
   );
 }
 
@@ -134,22 +168,17 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 24,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 8,
-  },
+
+  input: {},
+
   hint: {
     fontSize: 12,
     opacity: 0.7,
     marginTop: 4,
   },
   chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 8,
   },
@@ -158,13 +187,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  chipSelected: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
   },
   chipTextSelected: {
-    color: 'white',
+    color: "white",
   },
 });
