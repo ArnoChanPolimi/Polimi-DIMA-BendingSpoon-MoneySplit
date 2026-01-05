@@ -1,21 +1,18 @@
 // app/(tabs)/index.tsx
-import type { ExpenseType, Group, GroupStatus } from "@/components/group/GroupCard"; // 只拿类型
+import type { ExpenseType, GroupStatus } from "@/components/group/GroupCard"; // 只拿类型
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import { t } from "@/core/i18n";
 import { useThemeColor } from "@/hooks/use-theme-color";
+import type { GroupWithMembers } from "@/services/groupsStore";
+import { listGroups } from "@/services/groupsStore";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-
-// Extended Group type with members array
-type GroupWithMembers = Group & {
-  members: Array<{ id: string; name: string; avatarColor: string; isOwner?: boolean }>;
-  ownerId?: string;
-};
 
 // ========== 筛选类型 ==========
 type TimeFilter = "all" | "lastYear" | "older";
@@ -208,7 +205,8 @@ function GroupCardLocal({
 
         {/* 第三行：成员数量 + 总金额 */}
         <ThemedText style={styles.membersLine}>
-          {group.membersCount} {t("members")} · {group.totalExpenses.toFixed(2)} €
+          {group.membersCount} {t("members")} · {group.totalExpenses.toFixed(2)} {group.currency ?? "€"}
+
         </ThemedText>
 
         {/* 第四行：消费类型 */}
@@ -242,6 +240,8 @@ export default function GroupsScreen() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [groups, setGroups] = useState<GroupWithMembers[]>([]);
+
 
   // theme colors
   const borderColor = useThemeColor({}, "border");
@@ -249,12 +249,27 @@ export default function GroupsScreen() {
   const textColor = useThemeColor({}, "text");
   const muted = useThemeColor({}, "icon");
   const primary = useThemeColor({}, "primary");
+useFocusEffect(
+  useCallback(() => {
+    let alive = true;
+
+    (async () => {
+      const data = await listGroups();
+      if (alive) setGroups(data);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [])
+);
+
 
   const filteredGroups = useMemo(() => {
     const now = new Date();
     const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-    return demoGroups
+    return groups
       .filter((g) => {
         if (timeFilter !== "all") {
           const startMs = new Date(g.startDate).getTime();
@@ -274,7 +289,7 @@ export default function GroupsScreen() {
       })
       .slice()
       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-  }, [timeFilter, statusFilter, typeFilter]);
+  }, [groups, timeFilter, statusFilter, typeFilter]);
 
   return (
     <AppScreen>

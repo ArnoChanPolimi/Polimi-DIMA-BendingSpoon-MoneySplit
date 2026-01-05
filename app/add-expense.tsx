@@ -1,7 +1,9 @@
 // app/add-expense.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import * as Linking from "expo-linking";
+import React, { useMemo, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -17,62 +19,104 @@ import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import PrimaryButton from "@/components/ui/PrimaryButton";
+import { createExpense } from "@/services/expenseApi";
+import { auth } from "@/services/firebase";
 
-// ====== 假数据：好友列表（以后可以换成真正的好友 / 通讯录）======
-type Friend = {
-  id: string;
-  name: string;
+
+const ME = { id: "me", name: "Me" };
+
+const CURRENCIES = ["EUR", "USD", "GBP", "TRY"] as const;
+type Currency = (typeof CURRENCIES)[number];
+
+type Participant = {
+  id: string;       // "me" or "typed:laura" etc.
+  label: string;    // shown on chip
+  isRealUser?: boolean; // future: true if it’s an actual signed user
 };
-
-const DEMO_FRIENDS: Friend[] = [
-  { id: "me", name: "You" },
-  { id: "bob", name: "Bob" },
-  { id: "alice", name: "Alice" },
-  { id: "tom", name: "Tom" },
-  { id: "carol", name: "Carol" },
-  { id: "emma", name: "Emma" },
-  { id: "jack", name: "Jack" },
-];
 
 export default function AddExpenseScreen() {
   const [title, setTitle] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
+  const [amount, setAmount] = useState(""); // numeric string
+  const [currency, setCurrency] = useState<Currency>("EUR");
   const [notes, setNotes] = useState("");
 
-  // 当前参与这次消费的人
-  const [participantIds, setParticipantIds] = useState<string[]>([
-    "me",
-    "bob",
-    "alice",
-    "tom",
-    "carol",
+  // participants: always include ME
+  const [participants, setParticipants] = useState<Participant[]>([
+    { id: ME.id, label: ME.name, isRealUser: true },
   ]);
 
-  // 控制「添加参与者」弹窗
+  // modal for adding participants
   const [showAddPeople, setShowAddPeople] = useState(false);
-  const [inviteSearch, setInviteSearch] = useState("");
+  const [participantName, setParticipantName] = useState("");
 
-  // ====== 切换某个好友是否参与 ======
-  const toggleParticipant = (id: string) => {
-    setParticipantIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+  const participantIds = useMemo(() => new Set(participants.map(p => p.id)), [participants]);
+
+  const removeParticipant = (id: string) => {
+    // don’t remove yourself
+    if (id === ME.id) return;
+    setParticipants(prev => prev.filter(p => p.id !== id));
   };
 
-  // ====== 点击 + 号：打开弹窗 ======
-  const openAddPeople = () => {
-    setShowAddPeople(true);
+  const addTypedParticipant = () => {
+    const name = participantName.trim();
+    if (!name) return;
+
+    const id = `typed:${name.toLowerCase()}`;
+    if (participantIds.has(id)) {
+      Alert.alert("Already added", "This participant is already in the list.");
+      return;
+    }
+
+    setParticipants(prev => [...prev, { id, label: name }]);
+    setParticipantName("");
   };
 
+  const openAddPeople = () => setShowAddPeople(true);
   const closeAddPeople = () => {
     setShowAddPeople(false);
-    setInviteSearch("");
+    setParticipantName("");
   };
 
-  // ====== 暂时只做 UI，真正保存逻辑以后写 ======
-  const handleSave = () => {
-    alert("TODO: implement save expense logic");
+  // TEMP: generate an invite link (real version will use Firestore expenseId + inviteCode)
+  const buildInviteLink = (expenseId: string, inviteCode: string) => {
+
+    return Linking.createURL("invite", { queryParams: { expenseId, code: inviteCode } });
   };
+
+const handleSave = async () => {
+  try {
+    if (!title.trim()) {
+      Alert.alert("Missing name");
+      return;
+    }
+    if (!amount || isNaN(Number(amount))) {
+      Alert.alert("Invalid amount");
+      return;
+    }
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error("Not logged in");
+
+    const { expenseId, inviteCode } = await createExpense({
+      title: title.trim(),
+      amount: Number(amount),
+      currency,
+      participantIds: [uid], // start with creator only
+    });
+
+    const inviteLink = Linking.createURL("invite", {
+      queryParams: { expenseId, code: inviteCode },
+    });
+
+    Alert.alert(
+      "Expense created",
+      `Share this link:\n${inviteLink}`
+    );
+  } catch (e: any) {
+    Alert.alert("Error", e.message ?? "Failed to save expense");
+  }
+};
+
 
   return (
     <AppScreen>
@@ -82,11 +126,8 @@ export default function AddExpenseScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* 1. 名字 */}
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          {/* 1) Name */}
           <ThemedText type="subtitle">1 · Give this expense a name</ThemedText>
           <TextInput
             style={styles.input}
@@ -95,51 +136,66 @@ export default function AddExpenseScreen() {
             onChangeText={setTitle}
           />
 
-          {/* 2. 谁参与 · 带 + 号 */}
+          {/* 2) Amount + Currency (replaces Total Amount) */}
           <View style={{ marginTop: 20 }}>
-            {/* <ThemedText type="subtitle">2 · Who is involved?</ThemedText> */}
-            <ThemedText type="subtitle">THIS IS THE CORRECT SCREEN</ThemedText>
-            <ThemedText style={styles.helperText}>
-              Later, this will come from your friends list / contacts. For now
-              it is demo data.
+            <ThemedText type="subtitle">2 · Amount</ThemedText>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              placeholder="e.g. 120"
+              value={amount}
+              onChangeText={setAmount}
+            />
+
+            <ThemedText style={[styles.helperText, { marginTop: 10 }]}>
+              Currency
             </ThemedText>
 
             <View style={styles.chipRow}>
-              {/* 已加入本次消费的参与者 */}
-              {DEMO_FRIENDS.filter((f) => participantIds.includes(f.id)).map(
-                (friend) => (
+              {CURRENCIES.map((c) => {
+                const selected = currency === c;
+                return (
                   <Pressable
-                    key={friend.id}
-                    onPress={() => toggleParticipant(friend.id)}
-                    style={[styles.chip, styles.chipSelected]}
+                    key={c}
+                    onPress={() => setCurrency(c)}
+                    style={[styles.chip, selected && styles.chipSelected]}
                   >
-                    <ThemedText style={styles.chipSelectedText}>
-                      {friend.name}
+                    <ThemedText style={selected ? styles.chipSelectedText : undefined}>
+                      {c}
                     </ThemedText>
                   </Pressable>
-                )
-              )}
+                );
+              })}
+            </View>
+          </View>
 
-              {/* 右侧这个就是你要的 + 号按钮 */}
+          {/* 3) Participants */}
+          <View style={{ marginTop: 20 }}>
+            <ThemedText type="subtitle">3 · Add participants</ThemedText>
+            <ThemedText style={styles.helperText}>
+              Select yourself and add others. Later we’ll connect this to real users + invite links.
+            </ThemedText>
+
+            <View style={styles.chipRow}>
+              {participants.map((p) => (
+                <Pressable
+                  key={p.id}
+                  onPress={() => removeParticipant(p.id)}
+                  style={[styles.chip, styles.chipSelected]}
+                >
+                  <ThemedText style={styles.chipSelectedText}>
+                    {p.label}{p.id === ME.id ? " (you)" : " ✕"}
+                  </ThemedText>
+                </Pressable>
+              ))}
+
               <Pressable style={styles.addChip} onPress={openAddPeople}>
                 <Ionicons name="add" size={20} color="#2563eb" />
               </Pressable>
             </View>
           </View>
 
-          {/* 3. 总金额 */}
-          <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">3 · Total amount</ThemedText>
-            <TextInput
-              style={styles.input}
-              keyboardType="numeric"
-              placeholder="e.g. 120"
-              value={totalAmount}
-              onChangeText={setTotalAmount}
-            />
-          </View>
-
-          {/* 4. 备注 */}
+          {/* 4) Notes */}
           <View style={{ marginTop: 20 }}>
             <ThemedText type="subtitle">Optional · Notes</ThemedText>
             <TextInput
@@ -152,65 +208,36 @@ export default function AddExpenseScreen() {
           </View>
 
           <View style={{ height: 24 }} />
-
           <PrimaryButton label="Save expense" onPress={handleSave} />
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ====== 添加参与者的弹窗（只是 UI）====== */}
+      {/* Add participants modal */}
       <Modal visible={showAddPeople} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ThemedView style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <ThemedText type="defaultSemiBold">
-                Add people to this expense
-              </ThemedText>
+              <ThemedText type="defaultSemiBold">Add participants</ThemedText>
               <Pressable onPress={closeAddPeople}>
                 <Ionicons name="close" size={20} />
               </Pressable>
             </View>
 
             <ThemedText style={styles.modalHelper}>
-              Choose existing friends or search / invite new ones.
+              Type a name and press Add. (Next step: invite real users by email.)
             </ThemedText>
 
-            {/* 搜索 / 邀请框（现在只做 UI，将来接通讯录 / 搜索接口） */}
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search name, email, phone…"
-              value={inviteSearch}
-              onChangeText={setInviteSearch}
-            />
-
-            <ScrollView style={{ maxHeight: 260 }}>
-              {DEMO_FRIENDS.map((friend) => {
-                const selected = participantIds.includes(friend.id);
-                return (
-                  <Pressable
-                    key={friend.id}
-                    onPress={() => toggleParticipant(friend.id)}
-                  >
-                    <ThemedView style={styles.modalRow}>
-                      <View style={styles.avatarCircle}>
-                        <ThemedText>
-                          {friend.name[0].toUpperCase()}
-                        </ThemedText>
-                      </View>
-                      <ThemedText style={{ flex: 1 }}>
-                        {friend.name}
-                      </ThemedText>
-                      {selected && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color="#2563eb"
-                        />
-                      )}
-                    </ThemedView>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TextInput
+                style={[styles.searchInput, { flex: 1 }]}
+                placeholder="e.g. Alice"
+                value={participantName}
+                onChangeText={setParticipantName}
+              />
+              <Pressable style={styles.addButton} onPress={addTypedParticipant}>
+                <ThemedText style={{ color: "white" }}>Add</ThemedText>
+              </Pressable>
+            </View>
 
             <PrimaryButton label="Done" onPress={closeAddPeople} />
           </ThemedView>
@@ -252,7 +279,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
   chipSelected: {
@@ -271,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // ===== 弹窗样式 =====
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -282,18 +309,16 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 16,
-    gap: 8,
+    gap: 10,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
   },
   modalHelper: {
     fontSize: 12,
     opacity: 0.7,
-    marginBottom: 8,
   },
   searchInput: {
     borderRadius: 10,
@@ -301,22 +326,12 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
     paddingHorizontal: 10,
     paddingVertical: 8,
-    marginBottom: 8,
     fontSize: 14,
   },
-  modalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-    gap: 10,
-  },
-  avatarCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#e5e7eb",
+  addButton: {
+    backgroundColor: "#2563eb",
+    paddingHorizontal: 14,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
