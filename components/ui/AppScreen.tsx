@@ -1,24 +1,29 @@
 // components/ui/AppScreen.tsx
-import { ThemedView } from '@/components/themed-view';
-import { ReactNode } from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ThemedView } from "@/components/themed-view";
+import { useThemeColor } from "@/hooks/use-theme-color";
+import { ReactNode } from "react";
+import { ScrollView, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface AppScreenProps {
   children: ReactNode;
 }
 
 export default function AppScreen({ children }: AppScreenProps) {
+  // ✅ 关键：取主题背景色
+  const backgroundColor = useThemeColor({}, "background");
+
   return (
     <SafeAreaView
-      style={styles.safeArea}
-      // 只管上、左、右的安全区域，底下留给 TabBar
-      edges={['top', 'left', 'right']}
+      style={[styles.safeArea, { backgroundColor }]}
+      // 原本的安全区域逻辑一字不动
+      edges={["top", "left", "right", "bottom"]}
     >
       <ThemedView style={styles.container}>
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {children}
         </ScrollView>
@@ -36,7 +41,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingVertical: 16,   // 这里也顺便留一点上下空隙
+    paddingVertical: 16,
     gap: 16,
   },
 });

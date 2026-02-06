@@ -96,6 +96,18 @@ export default function QuickAddScreen() {
     }
   };
 
+  // ✅ 主题色只算一次（不在每个 Chip 里算）
+  const borderColor = useThemeColor({}, "border");
+  const cardColor = useThemeColor({}, "card");
+
+  // 选中态颜色（保持你原有设计）
+  const selectedBg = "#2563eb";
+  const selectedBorder = "#2563eb";
+
+  const peopleText = selected
+    .map((id) => (id === "you" ? t("you") : id))
+    .join(", ");
+
   return (
     <AppScreen>
       <AppTopBar title="New Expense Group" />

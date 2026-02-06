@@ -1,6 +1,7 @@
 // components/ui/AppTopBar.tsx
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { useThemeColor } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -25,8 +26,13 @@ export default function AppTopBar({
   rightIconName,
   onRightIconPress,
 }: AppTopBarProps) {
+  // ✅ 主题颜色：让 icon / 文本 / 边框都随主题变化
+  const textColor = useThemeColor({}, "text");
+  const borderColor = useThemeColor({}, "border");
+  const backgroundColor = useThemeColor({}, "background");
+
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { backgroundColor }]}>
       {/* 左侧：可选返回按钮，占位保证标题居中 */}
       <View style={styles.left}>
         {showBack ? (
@@ -34,14 +40,19 @@ export default function AppTopBar({
             onPress={onBackPress ?? (() => router.back())}
             hitSlop={10}
           >
-            <Ionicons name="chevron-back-outline" size={20} />
+            <Ionicons
+              name="chevron-back-outline"
+              size={20}
+              color={textColor}
+            />
           </Pressable>
         ) : (
           <View style={{ width: 20 }} />
         )}
       </View>
 
-      <ThemedText type="title" style={styles.title}>
+      {/* 标题：ThemedText 本身会跟主题，但这里明确一下颜色更稳 */}
+      <ThemedText type="title" style={[styles.title, { color: textColor }]}>
         {title}
       </ThemedText>
 
@@ -49,10 +60,13 @@ export default function AppTopBar({
         {rightLabel && (
           <Pressable
             onPress={onRightPress}
-            style={styles.rightLabelWrapper}
+            style={[styles.rightLabelWrapper, { borderColor }]}
             hitSlop={10}
           >
-            <ThemedText type="defaultSemiBold" style={styles.rightLabel}>
+            <ThemedText
+              type="defaultSemiBold"
+              style={[styles.rightLabel, { color: textColor }]}
+            >
               {rightLabel}
             </ThemedText>
           </Pressable>
@@ -64,7 +78,7 @@ export default function AppTopBar({
             style={styles.iconWrapper}
             hitSlop={10}
           >
-            <Ionicons name={rightIconName} size={22} />
+            <Ionicons name={rightIconName} size={22} color={textColor} />
           </Pressable>
         )}
       </View>
@@ -99,7 +113,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#ddd",
+    // borderColor 由主题注入
   },
   rightLabel: {
     fontSize: 14,
