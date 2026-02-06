@@ -1,29 +1,99 @@
-// app/(tabs)/quick-add.tsx
-import { ThemedText } from "@/components/themed-text";
-import ThemedTextInput from "@/components/themed-text-input";
-import { ThemedView } from "@/components/themed-view";
-import AppScreen from "@/components/ui/AppScreen";
-import AppTopBar from "@/components/ui/AppTopBar";
-import PrimaryButton from "@/components/ui/PrimaryButton";
-import { t } from "@/core/i18n";
-import { useThemeColor } from "@/hooks/use-theme-color";
-import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+// app\(tabs)\quick-add.tsx
+import { auth, db } from '@/services/firebase';
+import { useRouter } from 'expo-router';
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import AppScreen from '@/components/ui/AppScreen';
+import AppTopBar from '@/components/ui/AppTopBar';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+
+import defaultFriends from '../../assets/data/friends.json';
 
 export default function QuickAddScreen() {
-  const [groupName, setGroupName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
+  const router = useRouter();
+  const [groupName, setGroupName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false); 
+  const [processStep, setProcessStep] = useState<string>(''); 
+  const [nameError, setNameError] = useState(false); 
 
-  const demoFriends = useMemo(() => ["Bob", "Alice", "Tom", "Carol"], []);
+  const generateBillId = () => {
+    const datePart = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `GB-${datePart}-${randomPart}`;
+  };
 
-  // ✅ 用稳定 id
-  const [selected, setSelected] = useState<string[]>(["you"]);
+  const handleSave = async () => {
+    setNameError(false);
+    setProcessStep('');
 
-  const toggleFriend = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((n) => n !== id) : [...prev, id]
-    );
+    if (!groupName.trim() || !amount) {
+      if (!groupName.trim()) setNameError(true);
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    setLoading(true);
+    setProcessStep('Step 1: Connecting...'); 
+
+    const myUid = auth.currentUser?.uid || "anon";
+    const trimmedName = groupName.trim();
+
+    try {
+      setProcessStep('Step 2: Checking name uniqueness...');
+      const groupsRef = collection(db, "groups");
+      const nameQuery = query(groupsRef, where("name", "==", trimmedName));
+      const querySnapshot = await getDocs(nameQuery);
+
+      if (!querySnapshot.empty) {
+        setLoading(false);
+        setNameError(true);
+        setProcessStep('Duplicate Name: Already Exists!'); 
+        return; 
+      }
+
+      setProcessStep('Step 3: Saving to Cloud...');
+      const uniqueBillId = generateBillId(); 
+      const finalDocRef = doc(db, "groups", uniqueBillId); 
+
+      // 【核心修复】：动脑子处理数据结构，防止 index.tsx 崩溃
+      // 把选中的字符串数组 ['john'] 转换成对象数组 [{username: 'john', displayName: '...'}]
+      const friendsData = selected.map(uname => {
+        const friendObj = (defaultFriends as any[]).find(f => f.username === uname);
+        return {
+          username: uname,
+          displayName: friendObj?.displayName || uname
+        };
+      });
+
+      await setDoc(finalDocRef, {
+        id: uniqueBillId,         
+        name: trimmedName,        
+        totalExpenses: parseFloat(amount),
+        ownerId: myUid,
+        updatedAt: Date.now(),
+        status: 'ongoing', // 新增：给主页 status.toUpperCase() 提供初始值
+        startDate: new Date().toISOString().split('T')[0], // 新增：对齐主页的日期显示
+        involvedFriends: friendsData 
+      });
+
+      setProcessStep('Step 4: Success!');
+      setTimeout(() => {
+        setLoading(false);
+        setProcessStep('');
+        router.replace('/(tabs)');
+      }, 500);
+
+    } 
+    catch (e: any) {
+      setLoading(false);
+      setProcessStep('Connection Failed');
+      Alert.alert("Error", "Check your internet connection.");
+    }
   };
 
   // ✅ 主题色只算一次（不在每个 Chip 里算）
@@ -40,155 +110,78 @@ export default function QuickAddScreen() {
 
   return (
     <AppScreen>
-      <AppTopBar title={t("newExpense")} />
-
+      <AppTopBar title="New Expense Group" />
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Step 1 */}
-        <ThemedText type="subtitle">{t("step1Title")}</ThemedText>
-        <ThemedTextInput
-          style={styles.input}
-          placeholder={t("expenseNamePlaceholder")}
-          value={groupName}
-          onChangeText={setGroupName}
+        <ThemedText type="subtitle" style={nameError ? { color: '#ef4444' } : {}}>
+          1 · Group Name {nameError && "(Already Exists!)"}
+        </ThemedText>
+        <TextInput 
+          style={[styles.input, nameError && styles.inputError]} 
+          value={groupName} 
+          onChangeText={(text) => {
+            setGroupName(text);
+            if (nameError) setNameError(false);
+          }} 
+          placeholder="e.g. Milano Pizza" 
+          editable={!loading}
         />
 
-        {/* Step 2 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          {t("step2Title")}
-        </ThemedText>
-        <ThemedText style={styles.hint}>{t("step2Hint")}</ThemedText>
-
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>2 · Involve Friends</ThemedText>
         <View style={styles.chipRow}>
-          <Chip
-            label={t("you")}
-            selected={selected.includes("you")}
-            onPress={() => toggleFriend("you")}
-            borderColor={borderColor}
-            cardColor={cardColor}
-            selectedBg={selectedBg}
-            selectedBorder={selectedBorder}
-          />
-
-          {demoFriends.map((name) => (
-            <Chip
-              key={name}
-              label={name}
-              selected={selected.includes(name)}
-              onPress={() => toggleFriend(name)}
-              borderColor={borderColor}
-              cardColor={cardColor}
-              selectedBg={selectedBg}
-              selectedBorder={selectedBorder}
-            />
+          {(defaultFriends as any[]).map((f) => (
+            <Pressable 
+              key={f.username} 
+              onPress={() => !loading && setSelected(prev => 
+                prev.includes(f.username) ? prev.filter(u => u !== f.username) : [...prev, f.username]
+              )}
+              style={[styles.chip, selected.includes(f.username) && styles.chipSelected]}
+            >
+              <ThemedText style={selected.includes(f.username) ? {color: 'white'} : {}}>
+                {f.displayName}
+              </ThemedText>
+            </Pressable>
           ))}
         </View>
 
-        {/* Step 3 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          {t("step3Title")}
-        </ThemedText>
-        <ThemedTextInput
-          style={styles.input}
-          placeholder={t("amountPlaceholder")}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>3 · Total Budget</ThemedText>
+        <TextInput 
+          style={styles.input} 
+          value={amount} 
+          onChangeText={setAmount} 
+          keyboardType="numeric" 
+          placeholder="0.00" 
+          editable={!loading}
         />
 
-        {/* Notes */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          {t("notesOptionalTitle")}
-        </ThemedText>
-        <ThemedTextInput
-          style={[styles.input, { height: 80, textAlignVertical: "top" }]}
-          placeholder={t("notesPlaceholder")}
-          value={note}
-          onChangeText={setNote}
-          multiline
-        />
-
-        <View style={{ height: 24 }} />
-
-        <PrimaryButton
-          label={t("saveDemo")}
-          onPress={() => {
-            Alert.alert(
-              t("demoAlertTitle"),
-              `${t("demoAlertName")}: ${groupName}\n${t("demoAlertAmount")}: ${amount}\n${t(
-                "demoAlertPeople"
-              )}: ${peopleText}`
-            );
-          }}
+        <View style={{ height: 32 }} />
+        
+        <PrimaryButton 
+          label="Confirm & Generate Bill" 
+          onPress={handleSave} 
+          disabled={loading}
+          loading={loading}
+          processStep={processStep}
         />
       </ScrollView>
     </AppScreen>
   );
 }
 
-// 小组件：好友选择 chip（纯组件，不用 hook）
-type ChipProps = {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-  borderColor: string;
-  cardColor: string;
-  selectedBg: string;
-  selectedBorder: string;
-};
-
-function Chip({
-  label,
-  selected,
-  onPress,
-  borderColor,
-  cardColor,
-  selectedBg,
-  selectedBorder,
-}: ChipProps) {
-  return (
-    <Pressable onPress={onPress}>
-      <ThemedView
-        style={[
-          styles.chip,
-          {
-            borderColor: selected ? selectedBorder : borderColor,
-            backgroundColor: selected ? selectedBg : cardColor,
-          },
-        ]}
-      >
-        <ThemedText style={selected ? styles.chipTextSelected : undefined}>
-          {label}
-        </ThemedText>
-      </ThemedView>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  content: {
-    paddingBottom: 24,
+  content: { paddingBottom: 24, paddingHorizontal: 16 },
+  input: {
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 10, marginTop: 8, backgroundColor: '#fff'
   },
-
-  input: {},
-
-  hint: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 4,
+  inputError: { 
+    borderColor: '#ef4444', 
+    borderWidth: 2, 
+    backgroundColor: '#fff5f5' 
   },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff'
   },
-  chipTextSelected: {
-    color: "white",
-  },
+  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
 });

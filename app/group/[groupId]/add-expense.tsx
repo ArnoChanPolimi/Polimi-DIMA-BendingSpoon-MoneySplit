@@ -1,7 +1,8 @@
 // app/group/[groupId]/add-expense.tsx
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,208 +19,184 @@ import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import PrimaryButton from "@/components/ui/PrimaryButton";
 
-// ====== 假数据：好友列表（以后可以换成真正的好友 / 通讯录）======
-type Friend = {
-  id: string;
-  name: string;
+import { auth, db } from "@/services/firebase";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { addDoc, collection, getDocs } from "firebase/firestore";
+
+// 使用 ES 模块导入 JSON，避免 CommonJS 解析错误
+import defaultFriends from '../../../assets/data/friends.json';
+
+type FriendRecord = {
+  uid: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+  addedAt: number;
 };
 
-const DEMO_FRIENDS: Friend[] = [
-  { id: "me", name: "You" },
-  { id: "bob", name: "Bob" },
-  { id: "alice", name: "Alice" },
-  { id: "tom", name: "Tom" },
-  { id: "carol", name: "Carol" },
-  { id: "emma", name: "Emma" },
-  { id: "jack", name: "Jack" },
-];
-
 export default function GroupAddExpenseScreen() {
+  const { groupId } = useLocalSearchParams();
+  const router = useRouter();
+
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [notes, setNotes] = useState("");
 
-  // 当前参与这次消费的人
-  const [participantIds, setParticipantIds] = useState<string[]>([
-    "me",
-    "bob",
-    "alice",
-    "tom",
-    "carol",
-  ]);
+  const [friends, setFriends] = useState<FriendRecord[]>(defaultFriends as FriendRecord[]);
+  const [participantIds, setParticipantIds] = useState<string[]>(
+    (defaultFriends as FriendRecord[]).map(f => f.username)
+  );
 
-  // 控制「添加参与者」弹窗
   const [showAddPeople, setShowAddPeople] = useState(false);
   const [inviteSearch, setInviteSearch] = useState("");
 
-  // ====== 切换某个好友是否参与 ======
-  const toggleParticipant = (id: string) => {
+  useEffect(() => {
+    const loadFriendsFromDb = async () => {
+      const myUid = auth.currentUser?.uid;
+      if (!myUid) return;
+
+      try {
+        const friendsRef = collection(db, "users", myUid, "friends");
+        const snapshot = await getDocs(friendsRef);
+        
+        if (!snapshot.empty) {
+          const fetchedFriends = snapshot.docs.map(d => d.data() as FriendRecord);
+          setFriends(fetchedFriends);
+          // 仅在初始状态时同步
+          if (participantIds.length === 0) {
+            setParticipantIds(fetchedFriends.map(f => f.username));
+          }
+        }
+      } catch (error) {
+        console.error("Fetch failed:", error);
+      }
+    };
+
+    loadFriendsFromDb();
+  }, []);
+
+  const toggleParticipant = (username: string) => {
     setParticipantIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(username) 
+        ? prev.filter((x) => x !== username) 
+        : [...prev, username]
     );
   };
 
-  // ====== 点击 + 号：打开弹窗 ======
-  const openAddPeople = () => {
-    setShowAddPeople(true);
-  };
+  const handleSave = async () => {
+    const amountNum = parseFloat(totalAmount);
+    
+    // 逻辑检查：确保数值有效
+    if (!title || isNaN(amountNum)) {
+      alert("Please enter a valid title and amount");
+      return;
+    }
 
-  const closeAddPeople = () => {
-    setShowAddPeople(false);
-    setInviteSearch("");
-  };
+    const myUid = auth.currentUser?.uid;
+    if (!myUid || !groupId) return;
 
-  // ====== 暂时只做 UI，真正保存逻辑以后写 ======
-  const handleSave = () => {
-    alert("TODO: implement save expense logic");
+    try {
+      await addDoc(collection(db, "groups", groupId as string, "expenses"), {
+        title,
+        amount: amountNum,
+        payerId: myUid,
+        participants: participantIds, 
+        notes: notes,
+        createdAt: Date.now(),
+      });
+
+      alert("Expense saved!");
+      router.back();
+    } catch (error) {
+      console.error("Save failed:", error);
+    }
   };
 
   return (
     <AppScreen>
       <AppTopBar title="New expense" showBack />
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* 1. 名字 */}
-          <ThemedText type="subtitle">1 · Give this expense a name</ThemedText>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <ThemedText type="subtitle">1 · Expense Name</ThemedText>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Dinner at Milano"
+            placeholder="e.g. Dinner"
             value={title}
             onChangeText={setTitle}
           />
 
-          {/* 2. 谁参与 · 有 + 号 */}
           <View style={{ marginTop: 20 }}>
-            {/* <ThemedText type="subtitle">2 · Who is involved?</ThemedText> */}
-            <ThemedText type="subtitle">1 · GIVE THIS EXPENSE A NAME FROM FILE XYZ</ThemedText>
-
-            <ThemedText style={styles.helperText}>
-              Later, this will come from your friends list / contacts. For now
-              it is demo data.
-            </ThemedText>
-
+            <ThemedText type="subtitle">2 · Who is involved?</ThemedText>
             <View style={styles.chipRow}>
-              {/* 已在这次消费中的人 */}
-              {DEMO_FRIENDS.filter((f) => participantIds.includes(f.id)).map(
-                (friend) => (
+              {friends
+                .filter((f) => participantIds.includes(f.username))
+                .map((friend) => (
                   <Pressable
-                    key={friend.id}
-                    onPress={() => toggleParticipant(friend.id)}
-                    style={[
-                      styles.chip,
-                      styles.chipSelected, // 目前这些都是已选状态
-                    ]}
+                    key={friend.username}
+                    onPress={() => toggleParticipant(friend.username)}
+                    style={[styles.chip, styles.chipSelected]}
                   >
-                    <ThemedText style={styles.chipSelectedText}>
-                      {friend.name}
-                    </ThemedText>
+                    <ThemedText style={styles.chipSelectedText}>{friend.displayName}</ThemedText>
                   </Pressable>
-                )
-              )}
-
-              {/* 右侧这个就是你要的 + 号 */}
-              <Pressable style={styles.addChip} onPress={openAddPeople}>
+                ))}
+              <Pressable style={styles.addChip} onPress={() => setShowAddPeople(true)}>
                 <Ionicons name="add" size={20} color="#2563eb" />
               </Pressable>
             </View>
           </View>
 
-          {/* 3. 总金额 */}
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">3 · Total amount</ThemedText>
+            <ThemedText type="subtitle">3 · Amount</ThemedText>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
-              placeholder="e.g. 120"
+              placeholder="0.00"
               value={totalAmount}
               onChangeText={setTotalAmount}
             />
           </View>
 
-          {/* 4. 备注 */}
           <View style={{ marginTop: 20 }}>
             <ThemedText type="subtitle">Optional · Notes</ThemedText>
             <TextInput
-              style={[styles.input, { height: 120, textAlignVertical: "top" }]}
+              style={[styles.input, { height: 100, textAlignVertical: "top" }]}
               multiline
-              placeholder="Anything you want to remember about this expense"
               value={notes}
               onChangeText={setNotes}
             />
           </View>
 
           <View style={{ height: 24 }} />
-
           <PrimaryButton label="Save expense" onPress={handleSave} />
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ====== 添加参与者的弹窗（只是 UI）====== */}
       <Modal visible={showAddPeople} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <ThemedView style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <ThemedText type="defaultSemiBold">
-                Add people to this expense
-              </ThemedText>
-              <Pressable onPress={closeAddPeople}>
+              <ThemedText type="defaultSemiBold">Add people</ThemedText>
+              <Pressable onPress={() => { setShowAddPeople(false); setInviteSearch(""); }}>
                 <Ionicons name="close" size={20} />
               </Pressable>
             </View>
-
-            <ThemedText style={styles.modalHelper}>
-              Choose existing friends or search / invite new ones.
-            </ThemedText>
-
-            {/* 搜索 / 邀请框（这里只是摆 UI） */}
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search name, email, phone…"
-              value={inviteSearch}
-              onChangeText={setInviteSearch}
-            />
-
-            <ScrollView style={{ maxHeight: 260 }}>
-              {DEMO_FRIENDS.map((friend) => {
-                const selected = participantIds.includes(friend.id);
-                return (
-                  <Pressable
-                    key={friend.id}
-                    onPress={() => toggleParticipant(friend.id)}
-                  >
-                    <ThemedView style={styles.modalRow}>
-                      <View style={styles.avatarCircle}>
-                        <ThemedText>
-                          {friend.name[0].toUpperCase()}
-                        </ThemedText>
-                      </View>
-                      <ThemedText style={{ flex: 1 }}>
-                        {friend.name}
-                      </ThemedText>
-                      {selected && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color="#2563eb"
-                        />
-                      )}
-                    </ThemedView>
-                  </Pressable>
-                );
-              })}
+            <ScrollView style={{ maxHeight: 300 }}>
+              {friends.map((friend) => (
+                <Pressable key={friend.username} onPress={() => toggleParticipant(friend.username)}>
+                  <ThemedView style={styles.modalRow}>
+                    <Image source={{ uri: friend.avatar }} style={styles.avatarCircle} />
+                    <ThemedText style={{ flex: 1 }}>{friend.displayName}</ThemedText>
+                    {participantIds.includes(friend.username) && (
+                      <Ionicons name="checkmark-circle" size={20} color="#2563eb" />
+                    )}
+                  </ThemedView>
+                </Pressable>
+              ))}
             </ScrollView>
-
-            <PrimaryButton
-              label="Done"
-              onPress={closeAddPeople}
-            />
+            <PrimaryButton label="Done" onPress={() => setShowAddPeople(false)} />
           </ThemedView>
         </View>
       </Modal>
@@ -228,103 +205,16 @@ export default function GroupAddExpenseScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  input: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 8,
-    fontSize: 14,
-    backgroundColor: "white",
-  },
-  helperText: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  chipSelected: {
-    backgroundColor: "#2563eb",
-    borderColor: "#2563eb",
-  },
-  chipSelectedText: {
-    color: "white",
-  },
-  addChip: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // ===== 弹窗样式 =====
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end",
-  },
-  modalCard: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
-    gap: 8,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  modalHelper: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginBottom: 8,
-  },
-  searchInput: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 8,
-    fontSize: 14,
-  },
-  modalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-    gap: 10,
-  },
-  avatarCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  container: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
+  input: { borderRadius: 10, borderWidth: 1, borderColor: "#e5e7eb", padding: 10, marginTop: 8, backgroundColor: "white" },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  chip: { borderRadius: 20, borderWidth: 1, borderColor: "#e5e7eb", paddingHorizontal: 16, paddingVertical: 8 },
+  chipSelected: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
+  chipSelectedText: { color: "white" },
+  addChip: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: "#e5e7eb", alignItems: "center", justifyContent: "center" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" },
+  modalCard: { backgroundColor: "white", borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, gap: 8 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  modalRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6", gap: 10 },
+  avatarCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#e5e7eb" },
 });

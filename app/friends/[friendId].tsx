@@ -5,32 +5,38 @@ import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    TextInput,
-    View,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
 } from 'react-native';
 
-const DEMO_NAMES: Record<string, string> = {
-  bob: 'Bob',
-  alice: 'Alice',
-  tom: 'Tom',
-};
+// 1. 引入你建立的真理源头文件
+import friendsDataRaw from '../../assets/data/friends.json';
+const friendsData = friendsDataRaw as any[];
 
 type Msg = { id: string; from: 'me' | 'other'; text: string };
 
 export default function FriendChatScreen() {
   const { friendId } = useLocalSearchParams<{ friendId: string }>();
-  const id = friendId ?? 'bob';
-  const friendName = DEMO_NAMES[id] ?? 'Friend';
+
+  // 2. 动态查找好友信息，彻底废弃 DEMO_NAMES
+  const currentFriend = useMemo(() => {
+    return friendsData.find((f: any) => f.username === friendId) || friendsData[0];
+  }, [friendId]);
 
   const [messages, setMessages] = useState<Msg[]>([
-    { id: '1', from: 'other', text: 'Hi, remember to add the bill?' },
+    { 
+      id: '1', 
+      from: 'other', 
+      text: `Hi, I'm ${currentFriend.displayName}. Remember to add the bill?` 
+    },
   ]);
   const [input, setInput] = useState('');
 
@@ -47,7 +53,8 @@ export default function FriendChatScreen() {
       behavior={Platform.select({ ios: 'padding', android: undefined })}
     >
       <AppScreen>
-        <AppTopBar title={friendName} showBack />
+        {/* 3. TopBar 现在显示的是 JSON 里的真实姓名 */}
+        <AppTopBar title={currentFriend.displayName} showBack />
 
         <ThemedView style={{ flex: 1 }}>
           <FlatList
@@ -61,13 +68,20 @@ export default function FriendChatScreen() {
                   item.from === 'me' ? styles.msgRowMe : styles.msgRowOther,
                 ]}
               >
+                {/* 4. 如果是对方发的消息，显示 JSON 里的头像 */}
+                {item.from === 'other' && (
+                  <Image source={{ uri: currentFriend.avatar }} style={styles.miniAvatar} />
+                )}
+                
                 <View
                   style={[
                     styles.bubble,
                     item.from === 'me' ? styles.bubbleMe : styles.bubbleOther,
                   ]}
                 >
-                  <ThemedText>{item.text}</ThemedText>
+                  <ThemedText style={item.from === 'me' ? styles.textMe : {}}>
+                    {item.text}
+                  </ThemedText>
                 </View>
               </View>
             )}
@@ -83,7 +97,7 @@ export default function FriendChatScreen() {
             multiline
           />
           <Pressable onPress={send} style={styles.sendButton}>
-            <Ionicons name="send-outline" size={20} />
+            <Ionicons name="send" size={20} color="#2563eb" />
           </Pressable>
         </View>
       </AppScreen>
@@ -92,39 +106,48 @@ export default function FriendChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  listContent: { paddingBottom: 8, gap: 6 },
-  msgRow: { flexDirection: 'row', marginVertical: 2, paddingHorizontal: 4 },
+  listContent: { padding: 16, gap: 12 },
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   msgRowMe: { justifyContent: 'flex-end' },
   msgRowOther: { justifyContent: 'flex-start' },
+  miniAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#eee',
+  },
   bubble: {
     maxWidth: '75%',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   bubbleMe: { backgroundColor: '#2563eb' },
-  bubbleOther: { backgroundColor: '#e5e7eb' },
+  bubbleOther: { backgroundColor: '#f3f4f6' },
+  textMe: { color: '#fff' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 6,
-    marginTop: 8,
+    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#fff',
   },
   input: {
     flex: 1,
-    minHeight: 36,
+    minHeight: 40,
     maxHeight: 100,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f9fafb',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    fontSize: 16,
   },
   sendButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
