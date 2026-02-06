@@ -1,170 +1,175 @@
-// app/(tabs)/quick-add.tsx
+// app\(tabs)\quick-add.tsx
+import { auth, db } from '@/services/firebase';
+import { useRouter } from 'expo-router';
+import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+
+import defaultFriends from '../../assets/data/friends.json';
 
 export default function QuickAddScreen() {
+  const router = useRouter();
   const [groupName, setGroupName] = useState('');
   const [amount, setAmount] = useState('');
-  const [note, setNote] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false); 
+  const [processStep, setProcessStep] = useState<string>(''); 
+  const [nameError, setNameError] = useState(false); 
 
-  // 这里先用假数据，后面可以用真正的好友列表
-  const demoFriends = ['Bob', 'Alice', 'Tom', 'Carol'];
-  const [selected, setSelected] = useState<string[]>(['You']);
+  const generateBillId = () => {
+    const datePart = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `GB-${datePart}-${randomPart}`;
+  };
 
-  const toggleFriend = (name: string) => {
-    setSelected((prev) =>
-      prev.includes(name)
-        ? prev.filter((n) => n !== name)
-        : [...prev, name],
-    );
+  const handleSave = async () => {
+    setNameError(false);
+    setProcessStep('');
+
+    if (!groupName.trim() || !amount) {
+      if (!groupName.trim()) setNameError(true);
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    setLoading(true);
+    setProcessStep('Step 1: Connecting...'); 
+
+    const myUid = auth.currentUser?.uid || "anon";
+    const trimmedName = groupName.trim();
+
+    try {
+      setProcessStep('Step 2: Checking name uniqueness...');
+      const groupsRef = collection(db, "groups");
+      const nameQuery = query(groupsRef, where("name", "==", trimmedName));
+      const querySnapshot = await getDocs(nameQuery);
+
+      if (!querySnapshot.empty) {
+        setLoading(false);
+        setNameError(true);
+        setProcessStep('Duplicate Name: Already Exists!'); 
+        return; 
+      }
+
+      setProcessStep('Step 3: Saving to Cloud...');
+      const uniqueBillId = generateBillId(); 
+      const finalDocRef = doc(db, "groups", uniqueBillId); 
+
+      // 【核心修复】：动脑子处理数据结构，防止 index.tsx 崩溃
+      // 把选中的字符串数组 ['john'] 转换成对象数组 [{username: 'john', displayName: '...'}]
+      const friendsData = selected.map(uname => {
+        const friendObj = (defaultFriends as any[]).find(f => f.username === uname);
+        return {
+          username: uname,
+          displayName: friendObj?.displayName || uname
+        };
+      });
+
+      await setDoc(finalDocRef, {
+        id: uniqueBillId,         
+        name: trimmedName,        
+        totalExpenses: parseFloat(amount),
+        ownerId: myUid,
+        updatedAt: Date.now(),
+        status: 'ongoing', // 新增：给主页 status.toUpperCase() 提供初始值
+        startDate: new Date().toISOString().split('T')[0], // 新增：对齐主页的日期显示
+        involvedFriends: friendsData 
+      });
+
+      setProcessStep('Step 4: Success!');
+      setTimeout(() => {
+        setLoading(false);
+        setProcessStep('');
+        router.replace('/(tabs)');
+      }, 500);
+
+    } 
+    catch (e: any) {
+      setLoading(false);
+      setProcessStep('Connection Failed');
+      Alert.alert("Error", "Check your internet connection.");
+    }
   };
 
   return (
     <AppScreen>
-      <AppTopBar title="New expense" />
-
+      <AppTopBar title="New Expense Group" />
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Step 1: 这次账单叫什么 */}
-        <ThemedText type="subtitle">1 · Give this expense a name</ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Dinner at Milano"
-          value={groupName}
-          onChangeText={setGroupName}
+        <ThemedText type="subtitle" style={nameError ? { color: '#ef4444' } : {}}>
+          1 · Group Name {nameError && "(Already Exists!)"}
+        </ThemedText>
+        <TextInput 
+          style={[styles.input, nameError && styles.inputError]} 
+          value={groupName} 
+          onChangeText={(text) => {
+            setGroupName(text);
+            if (nameError) setNameError(false);
+          }} 
+          placeholder="e.g. Milano Pizza" 
+          editable={!loading}
         />
 
-        {/* Step 2: 谁参加了（好友选择） */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          2 · Who is involved?
-        </ThemedText>
-        <ThemedText style={styles.hint}>
-          Later, this will come from your friends list / contacts. For now it is demo data.
-        </ThemedText>
-
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>2 · Involve Friends</ThemedText>
         <View style={styles.chipRow}>
-          <Chip
-            label="You"
-            selected={selected.includes('You')}
-            onPress={() => toggleFriend('You')}
-          />
-          {demoFriends.map((name) => (
-            <Chip
-              key={name}
-              label={name}
-              selected={selected.includes(name)}
-              onPress={() => toggleFriend(name)}
-            />
+          {(defaultFriends as any[]).map((f) => (
+            <Pressable 
+              key={f.username} 
+              onPress={() => !loading && setSelected(prev => 
+                prev.includes(f.username) ? prev.filter(u => u !== f.username) : [...prev, f.username]
+              )}
+              style={[styles.chip, selected.includes(f.username) && styles.chipSelected]}
+            >
+              <ThemedText style={selected.includes(f.username) ? {color: 'white'} : {}}>
+                {f.displayName}
+              </ThemedText>
+            </Pressable>
           ))}
         </View>
 
-        {/* Step 3: 金额 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          3 · Total amount
-        </ThemedText>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 120"
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>3 · Total Budget</ThemedText>
+        <TextInput 
+          style={styles.input} 
+          value={amount} 
+          onChangeText={setAmount} 
+          keyboardType="numeric" 
+          placeholder="0.00" 
+          editable={!loading}
         />
 
-        {/* 可选备注 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>
-          Optional · Notes
-        </ThemedText>
-        <TextInput
-          style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-          placeholder="Anything you want to remember about this expense"
-          value={note}
-          onChangeText={setNote}
-          multiline
-        />
-
-        <View style={{ height: 24 }} />
-
-        <PrimaryButton
-          title="Save (demo)"
-          onPress={() => {
-            // 现在先不连数据库，弹个提示就行
-            alert(
-              `Demo:\nName: ${groupName}\nAmount: ${amount}\nPeople: ${selected.join(
-                ', ',
-              )}`,
-            );
-          }}
+        <View style={{ height: 32 }} />
+        
+        <PrimaryButton 
+          label="Confirm & Generate Bill" 
+          onPress={handleSave} 
+          disabled={loading}
+          loading={loading}
+          processStep={processStep}
         />
       </ScrollView>
     </AppScreen>
   );
 }
 
-// 小组件：好友选择 chip
-type ChipProps = {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-};
-
-function Chip({ label, selected, onPress }: ChipProps) {
-  return (
-    <ThemedView
-      as={View}
-      style={[
-        styles.chip,
-        selected && styles.chipSelected,
-      ]}
-    >
-      <ThemedText
-        onPress={onPress}
-        style={selected ? styles.chipTextSelected : undefined}
-      >
-        {label}
-      </ThemedText>
-    </ThemedView>
-  );
-}
-
 const styles = StyleSheet.create({
-  content: {
-    paddingBottom: 24,
-  },
+  content: { paddingBottom: 24, paddingHorizontal: 16 },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 8,
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 10, marginTop: 8, backgroundColor: '#fff'
   },
-  hint: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 4,
+  inputError: { 
+    borderColor: '#ef4444', 
+    borderWidth: 2, 
+    backgroundColor: '#fff5f5' 
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff'
   },
-  chipSelected: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  chipTextSelected: {
-    color: 'white',
-  },
+  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
 });

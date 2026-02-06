@@ -42,3 +42,7 @@ app-example
 /ios
 /android
 .history/
+tmp/
+node_modules/
+.expo/
+dist/
