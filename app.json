@@ -7,11 +7,12 @@
     "icon": "./assets/images/icon.png",
     "scheme": "aasplitapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false, // true
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.polimi.moneysplit",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -44,7 +45,7 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false // true
     }
   }
 }

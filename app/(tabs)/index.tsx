@@ -4,30 +4,14 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 // 1. Firebase 核心引用
 import { db } from '@/services/firebase';
+// 导入统一的假数据源
+import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
-
-// 2. 合理的假数据：编号格式已统一为 GB-xxxx
-const DEMO_GROUPS = [
-  { 
-    id: 'GB-20220412-X9P2', 
-    name: 'Paris Trip 2022', 
-    totalExpenses: 260.0, 
-    status: 'finished',
-    startDate: '2022-04-12'
-  },
-  { 
-    id: 'GB-20230101-R4T7', 
-    name: 'Roommates Bills', 
-    totalExpenses: 1520.0, 
-    status: 'ongoing',
-    startDate: '2023-01-01'
-  }
-];
 
 export default function GroupsScreen() {
   const [firebaseGroups, setFirebaseGroups] = useState<any[]>([]);
@@ -54,7 +38,7 @@ export default function GroupsScreen() {
   }, []);
 
   // 4. 合并数据源：真数据 + 假数据
-  const allGroups = [...firebaseGroups, ...DEMO_GROUPS];
+  const allGroups = [...firebaseGroups, ...Object.values(MOCK_GROUPS_DATA)];
 
   return (
     <AppScreen>

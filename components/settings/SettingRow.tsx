@@ -1,6 +1,8 @@
 // components/settings/SettingRow.tsx
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useThemeColor } from "@/hooks/use-theme-color"; // 确保图标颜色随主题变化
+import { Ionicons } from "@expo/vector-icons"; // 导入图标库
 import { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,14 +10,29 @@ interface Props {
   title: string;
   subtitle?: string;
   onPress?: () => void;
-  right?: ReactNode; // 右侧可以放 Switch、文字等
+  right?: ReactNode; 
+  icon?: keyof typeof Ionicons.glyphMap; // 新增：支持传入图标名
 }
 
-export default function SettingRow({ title, subtitle, onPress, right }: Props) {
+export default function SettingRow({ title, subtitle, onPress, right, icon }: Props) {
+  const textColor = useThemeColor({}, "text");
+
   const content = (
     <ThemedView style={styles.row}>
       <View style={styles.left}>
-        <ThemedText type="defaultSemiBold">{title}</ThemedText>
+        <View style={styles.titleContainer}>
+          {/* 如果传了 icon，就渲染在文字左侧 */}
+          {icon && (
+            <Ionicons 
+              name={icon} 
+              size={18} 
+              color={textColor} 
+              style={styles.iconStyle} 
+            />
+          )}
+          <ThemedText type="defaultSemiBold">{title}</ThemedText>
+        </View>
+        
         {subtitle && (
           <ThemedText style={styles.subtitle}>{subtitle}</ThemedText>
         )}
@@ -37,11 +54,18 @@ export default function SettingRow({ title, subtitle, onPress, right }: Props) {
 
 const styles = StyleSheet.create({
   row: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconStyle: {
+    marginRight: 10,
   },
   left: {
     flex: 1,

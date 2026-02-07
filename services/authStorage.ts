@@ -1,15 +1,21 @@
-// services/authStorage.ts
+// services\authStorage.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import type { Session } from './AuthContext';
+// 核心修复：必须从 firebase 导入 User 类型，否则 Session 定义会报错
+import { User as FirebaseUser } from 'firebase/auth';
+
+export type Session = {
+  token: string;
+  user: FirebaseUser;
+};
 
 const TOKEN = 'ms_token';
 const USER  = 'ms_user';
 
 const isWeb = Platform.OS === 'web';
 
-// 统一封装：Web ⟶ AsyncStorage；iOS/Android ⟶ SecureStore
+// 统一封装：Web -> AsyncStorage；iOS/Android -> SecureStore
 async function getItem(key: string): Promise<string | null> {
   try {
     if (isWeb) return await AsyncStorage.getItem(key);

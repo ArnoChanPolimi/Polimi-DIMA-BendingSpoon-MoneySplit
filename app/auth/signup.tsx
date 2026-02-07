@@ -1,51 +1,75 @@
 // app/auth/signup.tsx
-import { useAuth } from "@/services/AuthContext";
+import { useAuth } from "@/components/auth/AuthContext";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function SignupScreen() {
   const { signup, checkEmailVerified } = useAuth();
+  const router = useRouter();
+
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
-  const [step, setStep] = useState<1 | 2>(1); // 1=输入信息注册, 2=邮箱验证
+  const [step, setStep] = useState<1 | 2>(1);
+  const [loading, setLoading] = useState(false);
 
-  // 步骤1：注册
+  // 第一步：处理注册提交
   const handleSignup = async () => {
-    if (!email || !password || !password2) return alert("Please fill all fields");
-    if (password !== password2) return alert("Passwords do not match");
+    if (!username || !email || !password || !password2) {
+      return Alert.alert("Error", "Please fill all fields");
+    }
+    if (password !== password2) {
+      return Alert.alert("Error", "Passwords do not match");
+    }
+
+    setLoading(true);
     try {
-      await signup(email, password);
-      setStep(2); // 提示用户去邮箱验证
+      // 执行注册：包含创建账号、存入Firestore、发送邮件、强制登出
+      await signup(email, password, username);
+      setStep(2); // 进入验证引导页
     } catch (err: any) {
-      alert(err.message);
+      Alert.alert("Signup Failed", err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // 步骤2：点击“我已验证”
+  // 第二步：用户点击“已验证”按钮
   const handleVerified = async () => {
-    try {
-      const verified = await checkEmailVerified();
-      if (!verified) return alert("Email not verified yet. Please click the link in your inbox.");
-      alert("Email verified! You can now log in.");
-      router.push("/auth/login");
-    } catch (err: any) {
-      alert(err.message);
-    }
+    // 逻辑说明：由于注册后已强制登出，此时 auth.currentUser 为空
+    // 我们告知用户直接去登录页，登录页的 handleLogin 会负责最终的验证检查
+    Alert.alert(
+      "Confirm",
+      "If you have clicked the link in your email, please proceed to the Login screen to access your account.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Go to Login", onPress: () => router.push("/auth/login") }
+      ]
+    );
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sign Up</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Create Account</Text>
 
       {step === 1 && (
-        <>
+        <View style={styles.form}>
+          <TextInput
+            placeholder="Username"
+            value={username}
+            onChangeText={setUsername}
+            style={styles.input}
+            autoCapitalize="none"
+          />
           <TextInput
             placeholder="Email"
             value={email}
             onChangeText={setEmail}
             style={styles.input}
             autoCapitalize="none"
+            keyboardType="email-address"
           />
           <TextInput
             placeholder="Password"
@@ -61,22 +85,129 @@ export default function SignupScreen() {
             style={styles.input}
             secureTextEntry
           />
-          <Button title="Sign Up" onPress={handleSignup} />
-        </>
+          
+          <View style={styles.buttonSpacer} />
+          
+          <View style={styles.buttonWrapper}>
+            <Button 
+              title={loading ? "Creating Account..." : "Sign Up"} 
+              onPress={handleSignup} 
+              disabled={loading}
+              color="#007AFF"
+            />
+          </View>
+        </View>
       )}
 
       {step === 2 && (
-        <>
-          <Text>✅ Please verify your email by clicking the link sent to {email}</Text>
-          <Button title="I HAVE VERIFIED" onPress={handleVerified} />
-        </>
+        <View style={styles.verifyContainer}>
+          <View style={styles.infoBox}>
+            <Text style={styles.verifyText}>
+              Verification email sent to:
+            </Text>
+            <Text style={styles.emailText}>{email}</Text>
+            <Text style={styles.subText}>
+              Please check your inbox (and spam folder) and click the link to activate your account.
+            </Text>
+          </View>
+
+          <View style={styles.buttonGroup}>
+            <View style={styles.buttonWrapper}>
+              <Button 
+                title="I HAVE VERIFIED" 
+                onPress={handleVerified} 
+                color="#28a745"
+              />
+            </View>
+
+            <View style={styles.buttonWrapper}>
+              <Button 
+                title="Resend Email" 
+                onPress={() => Alert.alert("Tip", "If you didn't receive the email, please go back and check your address or wait a few minutes.")} 
+                color="#FF9800" 
+              />
+            </View>
+
+            <View style={styles.buttonWrapper}>
+              <Button 
+                title="Back to Edit" 
+                onPress={() => setStep(1)} 
+                color="#666" 
+              />
+            </View>
+          </View>
+        </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, justifyContent: "center" },
-  title: { fontSize: 24, marginBottom: 16 },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 8, marginBottom: 12, borderRadius: 6 },
+  container: { 
+    flexGrow: 1, 
+    padding: 24, 
+    justifyContent: "center",
+    backgroundColor: "#fff" 
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: "bold", 
+    marginBottom: 32, 
+    textAlign: "center",
+    color: "#333" 
+  },
+  form: {
+    width: "100%",
+  },
+  input: { 
+    borderWidth: 1, 
+    borderColor: "#ddd", 
+    padding: 14, 
+    marginBottom: 16, 
+    borderRadius: 10,
+    backgroundColor: "#f9f9f9"
+  },
+  buttonSpacer: {
+    height: 10
+  },
+  verifyContainer: { 
+    alignItems: "center",
+    width: "100%"
+  },
+  infoBox: {
+    backgroundColor: "#E6F4FE",
+    padding: 20,
+    borderRadius: 12,
+    width: "100%",
+    marginBottom: 30,
+    alignItems: "center"
+  },
+  verifyText: { 
+    fontSize: 16, 
+    color: "#555",
+    marginBottom: 8
+  },
+  emailText: { 
+    fontSize: 18, 
+    fontWeight: "bold", 
+    color: "#007AFF",
+    marginBottom: 12,
+    textAlign: "center"
+  },
+  subText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20
+  },
+  buttonGroup: {
+    width: "100%",
+    alignItems: "center"
+  },
+  buttonWrapper: {
+    width: "100%", // 这里确保按钮容器占满
+    marginBottom: 12,
+    borderRadius: 8,
+    overflow: "hidden" // 确保圆角在Android上生效
+  }
 });

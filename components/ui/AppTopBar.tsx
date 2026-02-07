@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 type AppTopBarProps = {
   title: string;
   showBack?: boolean;
-  /** ✅ 新增：可以自己决定返回去哪儿 */
+  /** 新增：可以自己决定返回去哪儿 */
   onBackPress?: () => void;
   rightLabel?: string;
   onRightPress?: () => void;
@@ -26,7 +26,7 @@ export default function AppTopBar({
   rightIconName,
   onRightIconPress,
 }: AppTopBarProps) {
-  // ✅ 主题颜色：让 icon / 文本 / 边框都随主题变化
+  // 主题颜色：让 icon / 文本 / 边框都随主题变化
   const textColor = useThemeColor({}, "text");
   const borderColor = useThemeColor({}, "border");
   const backgroundColor = useThemeColor({}, "background");
