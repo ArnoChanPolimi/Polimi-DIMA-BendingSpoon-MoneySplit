@@ -1,3 +1,4 @@
+// core\i18n\index.ts
 import * as Localization from "expo-localization";
 import { I18n } from "i18n-js";
 
@@ -11,6 +12,7 @@ const translations = {
     account: "Account",
     signedIn: "Signed in",
     switchAccount: "Switch account",
+    editName: "Edit name",
     logout: "Log out",
     preferences: "Preferences",
 
@@ -114,6 +116,7 @@ const translations = {
     settings: "设置",
     account: "账号",
     signedIn: "已登录",
+    editName: "修改名称",          // 补齐这个
     switchAccount: "切换账号",
     logout: "退出登录",
     preferences: "偏好",
@@ -215,6 +218,7 @@ const translations = {
     settings: "Impostazioni",
     account: "Account",
     signedIn: "Accesso effettuato",
+    editName: "Modifica nome",     // 补齐这个
     switchAccount: "Cambia account",
     logout: "Esci",
     preferences: "Preferenze",
