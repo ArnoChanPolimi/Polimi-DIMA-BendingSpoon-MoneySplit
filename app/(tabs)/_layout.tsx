@@ -7,10 +7,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 
 export default function TabsLayout() {
-  // ✅ 关键：让这个组件在语言切换时重新渲染，title 才会变
+  // 关键：让这个组件在语言切换时重新渲染，title 才会变
   const { language } = useSettings();
 
-  // ✅ 主题化 tab bar 颜色
+  // 主题化 tab bar 颜色
   const backgroundColor = useThemeColor({}, "background");
   const activeTintColor = useThemeColor({}, "primary");
   const inactiveTintColor = useThemeColor({}, "icon");

@@ -10,6 +10,11 @@ import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import { useThemeColor } from "@/hooks/use-theme-color";
 
+import { doc, getDoc } from 'firebase/firestore'; // 获取数据库文档
+import { getDownloadURL, ref } from 'firebase/storage'; // 获取图片链接
+import { ActivityIndicator, Image } from 'react-native'; // 加载状态和图片组件
+import { db, storage } from '../../services/firebase'; // 你的核心配置
+
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 4;
 const GRID_GAP = 12;
@@ -21,6 +26,36 @@ export default function BillDetailScreen() {
   const textColor = useThemeColor({}, "text");
   const borderColor = useThemeColor({}, "border");
   const tintColor = "#0a7ea4";
+    // 在 BillDetailScreen 内部增加：
+    const [billData, setBillData] = useState<any>(null);
+    const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    React.useEffect(() => {
+    const loadData = async () => {
+        if (!id) return;
+        try {
+        // 1. 去数据库拿账单信息
+        const docSnap = await getDoc(doc(db, "expenses", id as string));
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setBillData(data);
+            
+            // 2. 如果账单里有图片路径，去 Storage 换取真实图片链接
+            if (data.receiptPath) {
+            const url = await getDownloadURL(ref(storage, data.receiptPath));
+            setReceiptUrl(url);
+            }
+        }
+        } catch (e) {
+        console.error(e);
+        } finally {
+        setLoading(false);
+        }
+    };
+    loadData();
+    }, [id]);
+  
 
   // 核心逻辑：数据驱动。这里的数据未来从数据库获取。
   // 无论人数是多少，UI 都会根据数组长度自动布局。
@@ -43,7 +78,9 @@ export default function BillDetailScreen() {
         {/* 汇总区域：展示总支出 */}
         <ThemedView style={[styles.summaryCard, { backgroundColor: tintColor }]}>
           <ThemedText style={styles.summaryLabel}>Total Expense</ThemedText>
-          <ThemedText style={styles.summaryValue}>150.00 €</ThemedText>
+          <ThemedText style={styles.summaryValue}>
+            {billData?.totalAmount || "0.00"} €
+          </ThemedText>
         </ThemedView>
 
         {/* 凭证区域：小票或截图 */}
@@ -53,7 +90,14 @@ export default function BillDetailScreen() {
             <Pressable style={[styles.addPhotoButton, { borderColor }]}>
               <Ionicons name="camera" size={28} color={tintColor} />
             </Pressable>
-            <View style={[styles.receiptPlaceholder, { backgroundColor: borderColor }]} />
+            {/* 增加逻辑判断：如果有图显示图，没图转圈圈，加载完显示最终图片 */}
+            {receiptUrl ? (
+            <Image source={{ uri: receiptUrl }} style={styles.receiptImage} />
+            ) : (
+            <View style={[styles.receiptPlaceholder, { backgroundColor: borderColor }]}>
+                {loading && <ActivityIndicator size="small" color={tintColor} />}
+            </View>
+            )}
           </ScrollView>
         </View>
 
@@ -112,5 +156,12 @@ const styles = StyleSheet.create({
   avatar: { width: 55, height: 55, borderRadius: 27.5, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
   amountBadge: { position: 'absolute', bottom: -2, right: -6, paddingHorizontal: 4, paddingVertical: 2, borderRadius: 10, borderWidth: 2, borderColor: '#FFF', minWidth: 32, alignItems: 'center' },
   amountText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-  nameLabel: { marginTop: 6, fontSize: 10, opacity: 0.6 }
+  nameLabel: { marginTop: 6, fontSize: 10, opacity: 0.6 },
+  receiptImage: {
+    width: 80, 
+    height: 80, 
+    borderRadius: 8, 
+    marginRight: 12,
+    backgroundColor: '#f1f1f1' // 图片加载前的底色
+  }
 });

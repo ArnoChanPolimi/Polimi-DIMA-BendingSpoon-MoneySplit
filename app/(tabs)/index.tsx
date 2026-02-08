@@ -3,10 +3,10 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 // 1. Firebase 核心引用
-import { db } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 // 导入统一的假数据源
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, or, query, where } from 'firebase/firestore';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -19,26 +19,53 @@ export default function GroupsScreen() {
 
   // 3. 实时监听云端数据库
   useEffect(() => {
-    // 监听 groups 集合，按 updatedAt 倒序排列（新生成的在前）
-    const q = query(collection(db, "groups"), orderBy("updatedAt", "desc"));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      }));
-      setFirebaseGroups(docs);
-      setLoading(false);
-    }, (error) => {
-      console.error("Firestore Listen Error:", error);
-      setLoading(false);
+    // 1. 初始进入立刻进入加载状态
+    setLoading(true);
+
+    // 2. 🔥 核心：监听 Auth 状态，直到 Firebase 确定你是谁
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        setFirebaseGroups([]);
+        setLoading(false);
+        return;
+      }
+
+      // 3. 用户确定了，开始拉取属于你的数据
+      // 这里的逻辑：只看你是创建者，或者你在名单里的。
+      const q = query(
+        collection(db, "groups"),
+        or(
+          where("ownerId", "==", user.uid),
+          where("participantIds", "array-contains", user.uid)
+        )
+        // ⚠️ 极其重要：如果还没去后台点链接建索引，请务必先注释掉 orderBy
+        // orderBy("updatedAt", "desc") 
+      );
+
+      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
+        const docs = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        }));
+        
+        console.log("Synced documents count:", docs.length);
+        setFirebaseGroups(docs);
+        setLoading(false);
+      }, (error) => {
+        console.error("Firestore error:", error);
+        setLoading(false);
+      });
+
+      return () => unsubscribeSnapshot();
     });
 
-    return () => unsubscribe(); // 页面销毁时取消监听，省电省流量
+    return () => unsubscribeAuth();
   }, []);
 
-  // 4. 合并数据源：真数据 + 假数据
-  const allGroups = [...firebaseGroups, ...Object.values(MOCK_GROUPS_DATA)];
+  // 4. 合并逻辑：如果有云端数据，只显示云端的；如果没有云端数据，显示假数据
+  const allGroups = (!loading && firebaseGroups.length > 0)
+    ? firebaseGroups 
+    : (loading ? [] : Object.values(MOCK_GROUPS_DATA));
 
   return (
     <AppScreen>

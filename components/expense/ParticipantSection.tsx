@@ -17,7 +17,7 @@ export function ParticipantSection({ selectedFriends, participantIds, onToggle, 
 
   return (
     <View style={styles.section}>
-      <ThemedText type="subtitle">2 · Participants</ThemedText>
+      {/* <ThemedText type="subtitle">2 · Participants</ThemedText> */}
       
       <View style={styles.tileGrid}>
         {/* 渲染已选中的用户瓦片 */}
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginRight: 6,
   },
-  addText: { fontSize: 11, color: '#6b7280', fontWeight: 'bold' }
+  addText: { fontSize: 11, color: '#6b7280', fontWeight: 'bold', lineHeight: 20 },
 });
