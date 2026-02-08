@@ -1,10 +1,10 @@
 // app\group\[groupId]\index.tsx
-import { auth, db } from '@/services/firebase';
+import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { arrayUnion, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 // 1. 修改导入
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
 
@@ -12,6 +12,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
+import * as ImagePicker from 'expo-image-picker';
+
 
 type GroupDetail = {
   id: string;
@@ -20,6 +22,10 @@ type GroupDetail = {
   totalExpenses: number;
   status: 'ongoing' | 'finished';
   involvedFriends?: { uid: string; displayName: string }[]; // 因为在 QuickAdd 存的是这个字段
+  receiptUrls?: string[];
+  ownerId: string;       // 补上这个
+  payerIds?: string[];   // 补上这个
+  participantIds?: string[]; // 补上这个
 };
 
 type ExpenseItem = {
@@ -38,72 +44,132 @@ export default function GroupDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [allFriends, setAllFriends] = useState<{ uid: string; displayName: string }[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [activeRole, setActiveRole] = useState<'payer' | 'participant'>('participant');
 
   // 1. 在组件内定义更新逻辑
-  const handleAddMember = async (friend: { uid: string, displayName: string }) => {
+  const handleAddMember = async (friend: { uid: string, displayName: string }, role: 'payer' | 'participant') => {
     if (!groupId) return;
     try {
       const groupRef = doc(db, "groups", groupId);
-      // 使用 arrayUnion 确保不会重复添加同一个好友
-      await updateDoc(groupRef, {
-        involvedFriends: arrayUnion(friend)
-      });
-      // 成功后，onSnapshot 会自动监听到变化并刷新胶囊列表
+      
+      // 构建更新数据
+      const updateData: any = {
+        involvedFriends: arrayUnion(friend), // 所有人都要进 involvedFriends
+      };
+
+      // 根据角色决定进哪个 ID 数组
+      if (role === 'payer') {
+        updateData.payerIds = arrayUnion(friend.uid);
+      } else {
+        updateData.participantIds = arrayUnion(friend.uid);
+      }
+
+      await updateDoc(groupRef, updateData);
     } catch (error) {
       console.error("Add member error:", error);
       Alert.alert("Error", "Failed to add member.");
     }
   };
-
-  useEffect(() => {
-    if (!groupId) return;
-
-    // --- 【优化 1：静态数据拦截】 ---
-    // 逻辑：如果是系统自带展示账单，直接赋值并关闭 Loading，不往后走
-    const staticGroup = MOCK_GROUPS_DATA[groupId];
-    if (staticGroup) {
-      console.log("System: Displaying demo bill.");
-      setGroup(staticGroup);
-      setExpenses([]); 
-      setLoading(false); 
-      return; // 核心：拦截，不让它去等 Firebase Auth
-    }
-
-    // --- 【逻辑 2：真数据加载】 ---
-    const user = auth.currentUser;
-    if (!user) {
-      // 如果不是假数据且没登录，这里才是真卡住了
+  // 追加上传小票逻辑
+  const handleAddReceipt = async () => {
+    // 1. 权限检查 (针对 iOS/Android)
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert("Permission Denied", "We need camera roll permissions to upload receipts.");
       return;
     }
 
-    // 1. 监听账单详情
-    const unsubGroup = onSnapshot(doc(db, "groups", groupId), (snap) => {
-      if (snap.exists()) {
-        setGroup({ id: snap.id, ...snap.data() } as GroupDetail);
+    try {
+      // 2. 选择图片
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.5,
+      });
+
+      if (!result.canceled && result.assets && groupId) {
+        setLoading(true); // 开启全局 Loading 或局部的上传状态
+        const newUri = result.assets[0].uri;
+        
+        // 3. 上传到 Firebase Storage
+        // 这里沿用你的 uniqueBillId 逻辑，直接用 groupId 作为文件夹名
+        const uploadedUrl = await uploadImageAndGetUrl(newUri, groupId);
+
+        // 4. 追加到 Firestore 的 receiptUrls 数组中
+        const groupRef = doc(db, "groups", groupId);
+        await updateDoc(groupRef, {
+          receiptUrls: arrayUnion(uploadedUrl)
+        });
+
+        setLoading(false);
+        Alert.alert("Success", "Receipt added successfully!");
       }
+    } catch (error) {
       setLoading(false);
-    });
+      console.error("Upload failed:", error);
+      Alert.alert("Error", "Failed to upload receipt.");
+    }
+  };
 
-    // 2. 监听流水记录
-    const unsubExpenses = onSnapshot(
-      query(collection(db, "groups", groupId, "expenses"), orderBy("createdAt", "desc")),
-      (snap) => {
-        setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ExpenseItem[]);
+  useEffect(() => {
+    if (!groupId) {
+      setLoading(false);
+      return;
+    }
+
+    // 1. 静态数据检查
+    const staticGroup = MOCK_GROUPS_DATA[groupId];
+    if (staticGroup) {
+      setGroup(staticGroup);
+      setLoading(false);
+      return;
+    }
+
+    // 2. 核心逻辑：监听 Auth 和 Data
+    const unsubAuth = auth.onAuthStateChanged((user) => {
+      if (!user) {
+        console.log("No user found, resetting state");
+        // 必须加上这几行，否则切换账号后，旧账号的数据还会挂在屏幕上
+        setGroup(null);
+        setExpenses([]);
+        setAllFriends([]);
+        setLoading(false); 
+        return;
       }
-    );
 
-    // 3. 监听好友列表 (用于 Add 按钮)
-    const friendsRef = collection(db, "users", user.uid, "friends");
-    const unsubFriends = onSnapshot(query(friendsRef, orderBy("displayName", "asc")), (snap) => {
-      const list = snap.docs.map(d => ({ uid: d.id, ...d.data() })) as any;
-      setAllFriends(list);
+      // 只有确定有 user 了，才开启 Firestore 监听
+      const unsubGroup = onSnapshot(doc(db, "groups", groupId), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setGroup({ id: snap.id, ...data } as GroupDetail);
+        }
+        setLoading(false); // ✅ 成功获取数据后关闭
+      }, (err) => {
+        console.error(err);
+        setLoading(false); // ✅ 报错也要关闭
+      });
+
+      const unsubExpenses = onSnapshot(
+        query(collection(db, "groups", groupId, "expenses"), orderBy("createdAt", "desc")),
+        (snap) => {
+          setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ExpenseItem[]);
+        }
+      );
+
+      const friendsRef = collection(db, "users", user.uid, "friends");
+      const unsubFriends = onSnapshot(query(friendsRef, orderBy("displayName", "asc")), (snap) => {
+        setAllFriends(snap.docs.map(d => ({ uid: d.id, ...d.data() })) as any);
+      });
+
+      // 清理函数嵌套
+      return () => {
+        unsubGroup();
+        unsubExpenses();
+        unsubFriends();
+      };
     });
 
-    return () => {
-      unsubGroup();
-      unsubExpenses();
-      unsubFriends();
-    };
+    return () => unsubAuth();
   }, [groupId]);
 
   if (loading) return <AppScreen><AppTopBar title="Loading..." showBack /><ThemedText style={{padding:20}}>Fetching...</ThemedText></AppScreen>;
@@ -151,32 +217,93 @@ export default function GroupDetailScreen() {
         </ThemedView>
 
         <ThemedText type="subtitle" style={styles.sectionTitle}>Group Members</ThemedText>
-        <View style={styles.memberRow}>
-          {/* 1. 循环渲染已加入成员的胶囊 */}
-          {group.involvedFriends?.map((friend) => (
-            <View key={friend.uid} style={styles.memberChip}>
-              <View style={styles.miniAvatar}>
-                <ThemedText style={styles.avatarText}>
-                  {(friend.displayName || "U").charAt(0).toUpperCase()}
+        <View style={styles.roleContainer}>
+          {/* 1. Owner 区域 */}
+          <ThemedText style={styles.roleLabel}>👑 Owner (Organizer)</ThemedText>
+          <View style={styles.memberRow}>
+            {group.involvedFriends?.filter(f => {
+              // 确保 f 存在且 uid 匹配
+              return f && f.uid === group.ownerId;
+            }).map(f => (
+              <View key={`owner-${f.uid}`} style={[styles.memberChip, styles.ownerChip]}>
+                <Ionicons name="ribbon" size={12} color="#f59e0b" style={{marginRight: 4}} />
+                <ThemedText style={styles.ownerText}>
+                  {f.uid === auth.currentUser?.uid ? "Me (Owner)" : f.displayName}
                 </ThemedText>
               </View>
-              <ThemedText style={styles.chipText} numberOfLines={1}>
-                {friend.displayName.length > 8 
-                  ? `${friend.displayName.substring(0, 8)}...` 
-                  : friend.displayName}
-              </ThemedText>
-            </View>
+            ))}
+          </View>
+
+          {/* 2. Payers 区域 */}
+          <ThemedText style={styles.roleLabel}>💳 Paid By</ThemedText>
+          <View style={styles.memberRow}>
+            {group.involvedFriends?.filter(f => group.payerIds?.includes(f.uid)).map(f => (
+              <View key={`payer-${f.uid}`} style={[styles.memberChip, styles.payerChip]}>
+                <Ionicons name="card" size={12} color="#10b981" style={{marginRight: 4}} />
+                <ThemedText style={styles.payerText}>{f.displayName}</ThemedText>
+              </View>
+            ))}
+
+            {/* 💡 补上这个按键 */}
+            <Pressable 
+              style={styles.addMemberChip} 
+              onPress={() => {
+                setActiveRole('payer'); // 关键：标记我是要加付款人
+                setIsModalVisible(true);
+              }}
+            >
+              <Ionicons name="add" size={14} color="#6b7280" />
+              <ThemedText style={styles.addMemberText}>Add</ThemedText>
+            </Pressable>
+          </View>
+          {/* 3. Participants 区域 */}
+          <ThemedText style={styles.roleLabel}>👥 Splitting With</ThemedText>
+          <View style={styles.memberRow}>
+            {group.involvedFriends?.filter(f => group.participantIds?.includes(f.uid)).map(f => (
+              <View key={`part-${f.uid}`} style={styles.memberChip}>
+                <ThemedText style={styles.chipText}>{f.displayName}</ThemedText>
+              </View>
+            ))}
+            
+            {/* 3. Participants 区域的按钮 */}
+            <Pressable 
+              style={styles.addMemberChip} 
+              onPress={() => {
+                setActiveRole('participant'); // 关键：标记我是要加分摊者
+                setIsModalVisible(true);
+              }}
+            >
+              <Ionicons name="add" size={14} color="#6b7280" />
+              <ThemedText style={styles.addMemberText}>Add</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+        {/* --- 新增：小票展示区域 --- */}
+        <ThemedText type="subtitle" style={styles.sectionTitle}>Receipts</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.receiptScroll}>
+          {/* 1. 已有的小票列表 */}
+          {group.receiptUrls?.map((url, index) => (
+            <Pressable key={index}>
+              <Image source={{ uri: url }} style={styles.receiptImage} />
+            </Pressable>
           ))}
 
-          {/* 2. 把原先笨重的 Add 按钮也拍扁成胶囊形态 */}
+          {/* 2. 新增的“追加上传”按钮 */}
           <Pressable 
-            style={styles.addMemberChip} 
-            onPress={() => setIsModalVisible(true)} // 改为打开弹窗
+            style={styles.addReceiptBtn} 
+            onPress={handleAddReceipt}
+            disabled={loading}
           >
-            <Ionicons name="add" size={14} color="#6b7280" />
-            <ThemedText style={styles.addMemberText}>Add</ThemedText>
+            {loading ? (
+              <ThemedText style={styles.addReceiptText}>Uploading...</ThemedText>
+            ) : (
+              <>
+                <Ionicons name="add-circle-outline" size={32} color="#64748b" />
+                <ThemedText style={styles.addReceiptText}>Add More</ThemedText>
+              </>
+            )}
           </Pressable>
-        </View>
+        </ScrollView>
       </ScrollView>
       {/* 选择好友的弹窗 */}
       <Modal visible={isModalVisible} animationType="slide" presentationStyle="pageSheet">
@@ -188,7 +315,7 @@ export default function GroupDetailScreen() {
                 key={friend.uid} 
                 style={styles.friendSelectItem} 
                 onPress={() => {
-                  handleAddMember(friend);
+                  handleAddMember(friend, activeRole);
                   setIsModalVisible(false);
                 }}
               >
@@ -263,4 +390,67 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
+  receiptScroll: { marginTop: 12, flexDirection: 'row' },
+  receiptImage: { 
+    width: 150, 
+    height: 200, 
+    borderRadius: 12, 
+    marginRight: 12, 
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  emptyReceiptBox: {
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    alignItems: 'center',
+    width: '100%'
+  },
+  emptyText: { color: '#94a3b8', fontSize: 12, marginTop: 4 },
+  addReceiptBtn: {
+    width: 150,
+    height: 200,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderStyle: 'dashed',
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  addReceiptText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 8,
+    fontWeight: '600'
+  },
+  roleContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginTop: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2, // 针对安卓
+  },
+  roleLabel: { 
+    fontSize: 11, 
+    color: '#94a3b8', 
+    fontWeight: 'bold', 
+    marginTop: 12, 
+    marginBottom: 8,
+    textTransform: 'uppercase'
+  },
+  ownerChip: { backgroundColor: '#fffbeb', borderColor: '#f59e0b' },
+  ownerText: { color: '#b45309', fontSize: 12, fontWeight: '600' },
+  payerChip: { backgroundColor: '#f0fdf4', borderColor: '#10b981' },
+  payerText: { color: '#15803d', fontSize: 12, fontWeight: '600' },
 });

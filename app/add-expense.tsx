@@ -1,333 +1,19 @@
-// // app/add-expense.tsx
-// import { Ionicons } from "@expo/vector-icons";
-// import React, { useState } from "react";
-// import {
-//   KeyboardAvoidingView,
-//   Modal,
-//   Platform,
-//   Pressable,
-//   ScrollView,
-//   StyleSheet,
-//   TextInput,
-//   View,
-// } from "react-native";
-
-// import { ThemedText } from "@/components/themed-text";
-// import { ThemedView } from "@/components/themed-view";
-// import AppScreen from "@/components/ui/AppScreen";
-// import AppTopBar from "@/components/ui/AppTopBar";
-// import PrimaryButton from "@/components/ui/PrimaryButton";
-
-// // ====== 假数据：好友列表（以后可以换成真正的好友 / 通讯录）======
-// type Friend = {
-//   id: string;
-//   name: string;
-// };
-
-// const DEMO_FRIENDS: Friend[] = [
-//   { id: "me", name: "You" },
-//   { id: "bob", name: "Bob" },
-//   { id: "alice", name: "Alice" },
-//   { id: "tom", name: "Tom" },
-//   { id: "carol", name: "Carol" },
-//   { id: "emma", name: "Emma" },
-//   { id: "jack", name: "Jack" },
-// ];
-
-// export default function AddExpenseScreen() {
-//   const [title, setTitle] = useState("");
-//   const [totalAmount, setTotalAmount] = useState("");
-//   const [notes, setNotes] = useState("");
-
-//   // 当前参与这次消费的人
-//   const [participantIds, setParticipantIds] = useState<string[]>([
-//     "me",
-//     "bob",
-//     "alice",
-//     "tom",
-//     "carol",
-//   ]);
-
-//   // 控制「添加参与者」弹窗
-//   const [showAddPeople, setShowAddPeople] = useState(false);
-//   const [inviteSearch, setInviteSearch] = useState("");
-
-//   // ====== 切换某个好友是否参与 ======
-//   const toggleParticipant = (id: string) => {
-//     setParticipantIds((prev) =>
-//       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-//     );
-//   };
-
-//   // ====== 点击 + 号：打开弹窗 ======
-//   const openAddPeople = () => {
-//     setShowAddPeople(true);
-//   };
-
-//   const closeAddPeople = () => {
-//     setShowAddPeople(false);
-//     setInviteSearch("");
-//   };
-
-//   // ====== 暂时只做 UI，真正保存逻辑以后写 ======
-//   const handleSave = () => {
-//     alert("TODO: implement save expense logic");
-//   };
-
-//   return (
-//     <AppScreen>
-//       <AppTopBar title="New expense" showBack />
-
-//       <KeyboardAvoidingView
-//         style={{ flex: 1 }}
-//         behavior={Platform.OS === "ios" ? "padding" : undefined}
-//       >
-//         <ScrollView
-//           contentContainerStyle={styles.container}
-//           keyboardShouldPersistTaps="handled"
-//         >
-//           {/* 1. 名字 */}
-//           <ThemedText type="subtitle">1 · Give this expense a name</ThemedText>
-//           <TextInput
-//             style={styles.input}
-//             placeholder="e.g. Dinner at Milano"
-//             value={title}
-//             onChangeText={setTitle}
-//           />
-
-//           {/* 2. 谁参与 · 带 + 号 */}
-//           <View style={{ marginTop: 20 }}>
-//             {/* <ThemedText type="subtitle">2 · Who is involved?</ThemedText> */}
-//             <ThemedText type="subtitle">THIS IS THE CORRECT SCREEN</ThemedText>
-//             <ThemedText style={styles.helperText}>
-//               Later, this will come from your friends list / contacts. For now
-//               it is demo data.
-//             </ThemedText>
-
-//             <View style={styles.chipRow}>
-//               {/* 已加入本次消费的参与者 */}
-//               {DEMO_FRIENDS.filter((f) => participantIds.includes(f.id)).map(
-//                 (friend) => (
-//                   <Pressable
-//                     key={friend.id}
-//                     onPress={() => toggleParticipant(friend.id)}
-//                     style={[styles.chip, styles.chipSelected]}
-//                   >
-//                     <ThemedText style={styles.chipSelectedText}>
-//                       {friend.name}
-//                     </ThemedText>
-//                   </Pressable>
-//                 )
-//               )}
-
-//               {/* 右侧这个就是你要的 + 号按钮 */}
-//               <Pressable style={styles.addChip} onPress={openAddPeople}>
-//                 <Ionicons name="add" size={20} color="#2563eb" />
-//               </Pressable>
-//             </View>
-//           </View>
-
-//           {/* 3. 总金额 */}
-//           <View style={{ marginTop: 20 }}>
-//             <ThemedText type="subtitle">3 · Total amount</ThemedText>
-//             <TextInput
-//               style={styles.input}
-//               keyboardType="numeric"
-//               placeholder="e.g. 120"
-//               value={totalAmount}
-//               onChangeText={setTotalAmount}
-//             />
-//           </View>
-
-//           {/* 4. 备注 */}
-//           <View style={{ marginTop: 20 }}>
-//             <ThemedText type="subtitle">Optional · Notes</ThemedText>
-//             <TextInput
-//               style={[styles.input, { height: 120, textAlignVertical: "top" }]}
-//               multiline
-//               placeholder="Anything you want to remember about this expense"
-//               value={notes}
-//               onChangeText={setNotes}
-//             />
-//           </View>
-
-//           <View style={{ height: 24 }} />
-
-//           <PrimaryButton label="Save expense" onPress={handleSave} />
-//         </ScrollView>
-//       </KeyboardAvoidingView>
-
-//       {/* ====== 添加参与者的弹窗（只是 UI）====== */}
-//       <Modal visible={showAddPeople} transparent animationType="slide">
-//         <View style={styles.modalOverlay}>
-//           <ThemedView style={styles.modalCard}>
-//             <View style={styles.modalHeader}>
-//               <ThemedText type="defaultSemiBold">
-//                 Add people to this expense
-//               </ThemedText>
-//               <Pressable onPress={closeAddPeople}>
-//                 <Ionicons name="close" size={20} />
-//               </Pressable>
-//             </View>
-
-//             <ThemedText style={styles.modalHelper}>
-//               Choose existing friends or search / invite new ones.
-//             </ThemedText>
-
-//             {/* 搜索 / 邀请框（现在只做 UI，将来接通讯录 / 搜索接口） */}
-//             <TextInput
-//               style={styles.searchInput}
-//               placeholder="Search name, email, phone…"
-//               value={inviteSearch}
-//               onChangeText={setInviteSearch}
-//             />
-
-//             <ScrollView style={{ maxHeight: 260 }}>
-//               {DEMO_FRIENDS.map((friend) => {
-//                 const selected = participantIds.includes(friend.id);
-//                 return (
-//                   <Pressable
-//                     key={friend.id}
-//                     onPress={() => toggleParticipant(friend.id)}
-//                   >
-//                     <ThemedView style={styles.modalRow}>
-//                       <View style={styles.avatarCircle}>
-//                         <ThemedText>
-//                           {friend.name[0].toUpperCase()}
-//                         </ThemedText>
-//                       </View>
-//                       <ThemedText style={{ flex: 1 }}>
-//                         {friend.name}
-//                       </ThemedText>
-//                       {selected && (
-//                         <Ionicons
-//                           name="checkmark-circle"
-//                           size={20}
-//                           color="#2563eb"
-//                         />
-//                       )}
-//                     </ThemedView>
-//                   </Pressable>
-//                 );
-//               })}
-//             </ScrollView>
-
-//             <PrimaryButton label="Done" onPress={closeAddPeople} />
-//           </ThemedView>
-//         </View>
-//       </Modal>
-//     </AppScreen>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     paddingHorizontal: 16,
-//     paddingBottom: 32,
-//     gap: 12,
-//   },
-//   input: {
-//     borderRadius: 10,
-//     borderWidth: 1,
-//     borderColor: "#e5e7eb",
-//     paddingHorizontal: 10,
-//     paddingVertical: 8,
-//     marginTop: 8,
-//     fontSize: 14,
-//     backgroundColor: "white",
-//   },
-//   helperText: {
-//     fontSize: 12,
-//     opacity: 0.7,
-//     marginTop: 4,
-//     marginBottom: 8,
-//   },
-//   chipRow: {
-//     flexDirection: "row",
-//     flexWrap: "wrap",
-//     gap: 8,
-//     marginTop: 4,
-//   },
-//   chip: {
-//     borderRadius: 999,
-//     borderWidth: 1,
-//     borderColor: "#e5e7eb",
-//     paddingHorizontal: 16,
-//     paddingVertical: 8,
-//   },
-//   chipSelected: {
-//     backgroundColor: "#2563eb",
-//     borderColor: "#2563eb",
-//   },
-//   chipSelectedText: {
-//     color: "white",
-//   },
-//   addChip: {
-//     width: 40,
-//     height: 40,
-//     borderRadius: 20,
-//     borderWidth: 1,
-//     borderColor: "#e5e7eb",
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-//   // ===== 弹窗样式 =====
-//   modalOverlay: {
-//     flex: 1,
-//     backgroundColor: "rgba(0,0,0,0.35)",
-//     justifyContent: "flex-end",
-//   },
-//   modalCard: {
-//     backgroundColor: "white",
-//     borderTopLeftRadius: 16,
-//     borderTopRightRadius: 16,
-//     padding: 16,
-//     gap: 8,
-//   },
-//   modalHeader: {
-//     flexDirection: "row",
-//     justifyContent: "space-between",
-//     alignItems: "center",
-//     marginBottom: 4,
-//   },
-//   modalHelper: {
-//     fontSize: 12,
-//     opacity: 0.7,
-//     marginBottom: 8,
-//   },
-//   searchInput: {
-//     borderRadius: 10,
-//     borderWidth: 1,
-//     borderColor: "#e5e7eb",
-//     paddingHorizontal: 10,
-//     paddingVertical: 8,
-//     marginBottom: 8,
-//     fontSize: 14,
-//   },
-//   modalRow: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     paddingVertical: 8,
-//     borderBottomWidth: 1,
-//     borderBottomColor: "#f3f4f6",
-//     gap: 10,
-//   },
-//   avatarCircle: {
-//     width: 30,
-//     height: 30,
-//     borderRadius: 15,
-//     backgroundColor: "#e5e7eb",
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-// });
-
-
 // app/add-expense.tsx
 // 从app/group/[groupId]/add-expense.tsx 迁移到 // app/add-expense.tsx
+import { ParticipantSection } from "@/components/expense/ParticipantSection";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import AppScreen from "@/components/ui/AppScreen";
+import AppTopBar from "@/components/ui/AppTopBar";
+import PrimaryButton from "@/components/ui/PrimaryButton";
+import { auth, db, uploadImageAndGetUrl } from "@/services/firebase";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { addDoc, collection, getDocs } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -337,20 +23,6 @@ import {
   TextInput,
   View
 } from "react-native";
-
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import AppScreen from "@/components/ui/AppScreen";
-import AppTopBar from "@/components/ui/AppTopBar";
-import PrimaryButton from "@/components/ui/PrimaryButton";
-
-import { auth, db } from "@/services/firebase";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { addDoc, collection, getDocs } from "firebase/firestore";
-
-// 使用 ES 模块导入 JSON，避免 CommonJS 解析错误
-
-import { ParticipantSection } from "@/components/expense/ParticipantSection";
 
 type FriendRecord = {
   uid: string;
@@ -377,6 +49,7 @@ export default function AddExpenseScreen() {
 
   const [showAddPeople, setShowAddPeople] = useState(false);
   const [inviteSearch, setInviteSearch] = useState("");
+  
 
   useEffect(() => {
     const loadFriendsFromDb = async () => {
@@ -418,6 +91,33 @@ export default function AddExpenseScreen() {
     loadFriendsFromDb();
   }, []);
 
+  // 1. 定义可选的图片状态
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  // 2. 选图逻辑：仅当用户点击时触发
+  const pickImage = async () => {
+    // 1. 主动请求权限
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      alert("Permission denied! Please allow access to your photos in settings.");
+      return;
+    }
+
+    // 2. 打开相册
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // 明确指定只选图片
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+    });
+
+    console.log("Picker Result:", result); // 检查结果
+
+    if (!result.canceled) {
+      setReceiptImage(result.assets[0].uri);
+    }
+  };
+
   const toggleParticipant = (friendUid: string) => {
     const myUid = auth.currentUser?.uid;
     if (!myUid) return;
@@ -442,7 +142,7 @@ export default function AddExpenseScreen() {
   const handleSave = async () => {
     const amountNum = parseFloat(totalAmount);
     
-    // 逻辑检查：确保数值有效
+    // 1. 基础合法性校验
     if (!title || isNaN(amountNum)) {
       alert("Please enter a valid title and amount");
       return;
@@ -455,18 +155,39 @@ export default function AddExpenseScreen() {
     }
 
     try {
-      // 1. 先定好存哪儿
-      const collectionPath = groupId 
-        ? collection(db, "groups", groupId as string, "expenses") // 走群组
-        : collection(db, "users", myUid, "personal_expenses");    // 走个人
+      // --- 核心优化逻辑：处理小票上传 ---
+      let finalReceiptUrl = "";
 
-      // 2. 直接存进去
+      if (receiptImage) {
+        try {
+          finalReceiptUrl = await uploadImageAndGetUrl(receiptImage, myUid);
+        } catch (uploadError) {
+          console.error("Image upload failed:", uploadError);
+          alert("Receipt image upload failed, but we'll save the expense details.");
+        }
+      }
+
+      // --- 🔥 关键修复：确保“我”永远在参与者名单里 ---
+      // 理由：如果不包含自己，首页的 participantIds 过滤逻辑会直接隐藏这条账单
+      const cleanMyUid = myUid.trim();
+      const finalParticipantIds = Array.from(new Set([
+        ...participantIds.map(id => id.trim()), 
+        cleanMyUid
+      ]));
+
+      // 2. 确定存储路径
+      const collectionPath = groupId 
+        ? collection(db, "groups", groupId as string, "expenses") 
+        : collection(db, "users", myUid, "personal_expenses");
+
+      // 3. 执行写入
       await addDoc(collectionPath, {
         title,
         amount: amountNum,
-        payerId: myUid,
-        participants: participantIds, // 就算不选别人，这里面也只有你一个人的 ID
+        payerId: cleanMyUid, // 确保支付者是当前用户
+        participants: finalParticipantIds, // 🔑 使用强制包含了自己的新数组
         notes: notes,
+        receiptUrl: finalReceiptUrl,
         createdAt: Date.now(),
       });
 
@@ -474,6 +195,7 @@ export default function AddExpenseScreen() {
       router.back();
     } catch (error) {
       console.error("Save failed:", error);
+      alert("Failed to save expense. Please try again.");
     }
   };
 
@@ -522,6 +244,36 @@ export default function AddExpenseScreen() {
               value={notes}
               onChangeText={setNotes}
             />
+          </View>
+          
+          <View style={{ marginTop: 20 }}>
+            <ThemedText type="subtitle">4 · Receipt (Optional)</ThemedText>
+            
+            <Pressable 
+              onPress={() => {
+                // console.log("Upload area pressed!"); 
+                alert("Triggered!");
+                pickImage();
+              }}
+              // FIX 1: 增加 hitSlop，扩大点击判定范围，防止边缘点不到
+              hitSlop={20} 
+              style={({ pressed }) => [
+                styles.uploadArea,
+                // FIX 2: 增加背景色反馈，让你肉眼能确认到底点中没
+                { backgroundColor: pressed ? '#f3f4f6' : '#f9fafb', opacity: pressed ? 0.7 : 1 }, 
+                receiptImage ? { padding: 0 } : null
+              ]}
+            >
+              {receiptImage ? (
+                <Image source={{ uri: receiptImage }} style={styles.previewImage} />
+              ) : (
+                /* FIX 3: 彻底删掉 pointerEvents: 'none'，让它变回正常的 View */
+                <View style={{ alignItems: 'center' }}> 
+                  <Ionicons name="cloud-upload-outline" size={28} color="#9ca3af" />
+                  <ThemedText style={{ color: '#9ca3af', marginTop: 4 }}>Add Receipt Photo</ThemedText>
+                </View>
+              )}
+            </Pressable>
           </View>
 
           <View style={{ height: 24 }} />
@@ -583,4 +335,22 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   modalRow: { flexDirection: "row", alignItems: "center", paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#f3f4f6", gap: 10 },
   avatarCircle: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#e5e7eb" },
+  uploadArea: {
+    marginTop: 8,
+    height: 120, // 至少给 100-150 的高度
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#e5e7eb",
+    borderStyle: "dashed",
+    backgroundColor: "#f9fafb",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
 });

@@ -4,21 +4,23 @@ import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import { useThemeColor } from '@/hooks/use-theme-color'; // 补上这个，否则 useThemeColor 报错
-import { auth, db } from '@/services/firebase';
+import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 // import defaultFriends from '../../assets/data/friends.json';
 import { ParticipantSection } from "@/components/expense/ParticipantSection";
+
+import * as ImagePicker from 'expo-image-picker';
+
 
 export default function QuickAddScreen() {
   const router = useRouter();
   const [groupName, setGroupName] = useState('');
   const [amount, setAmount] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [receipt, setReceipt] = useState<string | null>(null); // 补回小票状态
+  const [receipts, setReceipts] = useState<string[]>([]);
   // 存放从 Firebase 捞出来的真实好友
   const [realFriends, setRealFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(false); 
@@ -26,6 +28,12 @@ export default function QuickAddScreen() {
   const [nameError, setNameError] = useState(false); 
   // 控制“添加好友”弹窗的显示/隐藏
   const [showAddPeople, setShowAddPeople] = useState(false);
+
+  // 你的新“双轨制”状态
+  const [selectedPayers, setSelectedPayers] = useState<string[]>([]);      // 谁付钱
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]); // 谁分摊
+  const [targetType, setTargetType] = useState<'payer' | 'participant'>('payer');
+
   // 增加一个 Effect 逻辑，去 Firebase 捞真人
   useEffect(() => {
     const loadRemoteFriends = async () => {
@@ -49,13 +57,50 @@ export default function QuickAddScreen() {
     return `GB-${datePart}-${randomPart}`;
   };
 
+  // 选图逻辑
+  const pickImage = async () => {
+    // 规则：Web 端不请求权限，防止 "Receiving end does not exist" 报错
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        alert("Permission denied!");
+        return;
+      }
+    }
+
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.5,
+      });
+
+      console.log("QuickAdd Picker Result:", result);
+
+      if (!result.canceled && result.assets) {
+        const newUri = result.assets[0].uri;
+        setReceipts(prev => [...prev, newUri]); // 累加图片
+      }
+    } catch (err) {
+      console.error("Image pick failed:", err);
+    }
+  };
+
   const handleSave = async () => {
     setNameError(false);
     setProcessStep('');
 
+    // 第一关：基础必填项检查
     if (!groupName.trim() || !amount) {
       if (!groupName.trim()) setNameError(true);
       Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    // 第二关：核心数据检查（你要加的是这一段，它是独立的！）
+    if ((selectedPayers.length > 0 || selectedParticipants.length > 0) && realFriends.length === 0) {
+      Alert.alert("Wait", "Friends list is still loading, please try again.");
       return;
     }
 
@@ -66,7 +111,21 @@ export default function QuickAddScreen() {
     const trimmedName = groupName.trim();
 
     try {
-      setProcessStep('Step 2: Checking name uniqueness...');
+      // 1. 生成唯一 ID (这是文件夹的名字)
+      const uniqueBillId = generateBillId(); 
+
+      // 2. 多图上传逻辑 (只写一遍！)
+      let uploadedUrls: string[] = [];
+      if (receipts.length > 0) {
+        setProcessStep(`Step 2: Uploading ${receipts.length} images...`);
+        // 并行上传
+        uploadedUrls = await Promise.all(
+          receipts.map(uri => uploadImageAndGetUrl(uri, uniqueBillId))
+        );
+      }
+
+      // 3. 查重
+      setProcessStep('Step 3: Checking name uniqueness...');
       const groupsRef = collection(db, "groups");
       const nameQuery = query(groupsRef, where("name", "==", trimmedName));
       const querySnapshot = await getDocs(nameQuery);
@@ -74,47 +133,56 @@ export default function QuickAddScreen() {
       if (!querySnapshot.empty) {
         setLoading(false);
         setNameError(true);
-        setProcessStep('Duplicate Name: Already Exists!'); 
+        setProcessStep('Duplicate Name!'); 
         return; 
       }
 
-      setProcessStep('Step 3: Saving to Cloud...');
-      const uniqueBillId = generateBillId(); 
-      const finalDocRef = doc(db, "groups", uniqueBillId); 
+      // 4. 保存到 Cloud
+      setProcessStep('Step 4: Saving...');
 
-      // 【核心修复】：动脑子处理数据结构，防止 index.tsx 崩溃
-      // 把选中的字符串数组 ['john'] 转换成对象数组 [{username: 'john', displayName: '...'}]
-      const friendsData = selected.map(uid => {
-        const friendObj = realFriends.find(f => f.uid === uid);
-        return {
-          uid: uid,
-          displayName: friendObj?.displayName || friendObj?.email || "Unknown"
-        };
-      });
+      const allUniqueIds = Array.from(new Set([...selectedPayers, ...selectedParticipants]));
+      
+      const finalFriendsData = realFriends
+        .filter(f => allUniqueIds.includes(f.uid))
+        .map(f => ({ 
+          uid: f.uid, 
+          displayName: f.displayName || f.email || "Unknown" 
+        }));
 
-      await setDoc(finalDocRef, {
+      const groupDocRef = doc(db, "groups", uniqueBillId);
+
+      await setDoc(groupDocRef, {
         id: uniqueBillId,         
         name: trimmedName,        
         totalExpenses: parseFloat(amount),
-        ownerId: myUid,
+        ownerId: myUid, 
+        payerIds: selectedPayers, 
+        participantIds: selectedParticipants,
+        involvedFriends: finalFriendsData, 
         updatedAt: Date.now(),
-        status: 'ongoing', // 新增：给主页 status.toUpperCase() 提供初始值
-        startDate: new Date().toISOString().split('T')[0], // 新增：对齐主页的日期显示
-        involvedFriends: friendsData 
+        status: 'ongoing',
+        startDate: new Date().toISOString().split('T')[0],
+        receiptUrls: uploadedUrls 
       });
-
-      setProcessStep('Step 4: Success!');
+      setProcessStep('Success!');
       setTimeout(() => {
+        // 1. 清空所有状态
+        setGroupName('');
+        setAmount('');
+        setSelectedPayers([]);
+        setSelectedParticipants([]);
+        setReceipts([]);
         setLoading(false);
         setProcessStep('');
+        
+        // 2. 再执行跳转
         router.replace('/(tabs)');
       }, 500);
 
-    } 
-    catch (e: any) {
+    } catch (e: any) {
       setLoading(false);
-      setProcessStep('Connection Failed');
-      Alert.alert("Error", "Check your internet connection.");
+      setProcessStep('Failed');
+      Alert.alert("Error", "Check your connection.");
     }
   };
 
@@ -143,17 +211,37 @@ export default function QuickAddScreen() {
           placeholder="e.g. Milano Pizza" 
           editable={!loading}
         />
-
+        {/* 支付者区域 */}
+        {/* 支付者区域 */}
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>2 · Who Paid? (Payers)</ThemedText>
         <View style={styles.participantContainer}> 
           <ParticipantSection 
-            selectedFriends={realFriends.filter(f => selected.includes(f.uid))}
-            participantIds={selected} 
-            onToggle={(uid) => setSelected(prev => prev.filter(id => id !== uid))}
-            onAddPress={() => setShowAddPeople(true)} 
+            selectedFriends={realFriends.filter(f => selectedPayers.includes(f.uid))}
+            participantIds={selectedPayers} 
+            onToggle={(uid) => setSelectedPayers(prev => prev.filter(id => id !== uid))}
+            onAddPress={() => {
+              setTargetType('payer'); 
+              setShowAddPeople(true);
+            }} 
+            // 注意：不要在外面再包裹任何带有 "2. Participants" 字样的组件
           />
         </View>
 
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>3 · Total Budget</ThemedText>
+        {/* 分摊参与者区域 */}
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>3 · Who Splits? (Participants)</ThemedText>
+        <View style={styles.participantContainer}> 
+          <ParticipantSection 
+            selectedFriends={realFriends.filter(f => selectedParticipants.includes(f.uid))}
+            participantIds={selectedParticipants} 
+            onToggle={(uid) => setSelectedParticipants(prev => prev.filter(id => id !== uid))}
+            onAddPress={() => {
+              setTargetType('participant');
+              setShowAddPeople(true);
+            }} 
+          />
+        </View>
+
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>4 · Total Budget</ThemedText>
         <TextInput 
           style={styles.input} 
           value={amount} 
@@ -162,14 +250,34 @@ export default function QuickAddScreen() {
           placeholder="0.00" 
           editable={!loading}
         />
-        <ThemedText type="subtitle" style={styles.sectionTitle}>4 · Receipt (Optional)</ThemedText>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>5 · Receipt (Optional)</ThemedText>
+        {/* 1. 图片预览区域 */}
+        {/* A. 预览区域：放在标题下方 */}
+        <View style={styles.previewList}>
+          {receipts.map((uri, index) => (
+            <View key={index} style={styles.thumbnailContainer}>
+              <Image source={{ uri }} style={styles.thumbnail} />
+              {/* 增加删除按键，点击触发 filter 过滤掉该索引的图 */}
+              <Pressable 
+                style={styles.deleteBadge} 
+                onPress={() => setReceipts(prev => prev.filter((_, i) => i !== index))}
+              >
+                <Ionicons name="close-circle" size={20} color="#ef4444" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
         <Pressable 
-          style={styles.receiptBox} 
-          onPress={() => {/* 这里接你的图片选择逻辑 */}}
+          style={({ pressed }) => [
+            styles.receiptBox, 
+            { opacity: pressed ? 0.7 : 1 },
+            Platform.OS === 'web' && ({ cursor: 'pointer' } as any)
+          ]} 
+          onPress={pickImage} 
         >
           <Ionicons name="cloud-upload-outline" size={24} color="#64748b" />
           <ThemedText style={{ color: '#64748b', marginLeft: 8 }}>
-            {receipt ? "Image Selected" : "Upload Receipt"}
+            {receipts.length > 0 ? "Add More Receipts" : "Upload Receipt"}
           </ThemedText>
         </Pressable>
 
@@ -198,14 +306,15 @@ export default function QuickAddScreen() {
                     <Pressable 
                       key={f.uid} 
                       onPress={() => {
-                        setSelected(prev => 
-                          prev.includes(f.uid) ? prev.filter(u => u !== f.uid) : [...prev, f.uid]
-                        );
+                        const setter = targetType === 'payer' ? setSelectedPayers : setSelectedParticipants;
+                        setter(prev => prev.includes(f.uid) ? prev.filter(u => u !== f.uid) : [...prev, f.uid]);
                       }}
                       style={styles.modalRow}
                     >
                       <ThemedText style={{ flex: 1 }}>{f.displayName || f.email}</ThemedText>
-                      {selected.includes(f.uid) && <Ionicons name="checkmark" size={20} color="#2563eb" />}
+                      { (targetType === 'payer' ? selectedPayers : selectedParticipants).includes(f.uid) && 
+                        <Ionicons name="checkmark" size={20} color="#2563eb" /> 
+                      }
                     </Pressable>
                   ))
                 )}
@@ -228,11 +337,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', fontSize: 16
   },
   participantContainer: {
-    // 删掉固定高度，改用内边距控制
-    paddingVertical: 10,
-    marginTop: 0, // 减少顶部间距，解决你标题重叠后的视觉断层
-    flexDirection: 'row', // 确保横向排列
+    paddingVertical: 20,
+    marginTop: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 60, // 加上这个，防止组件缩成一团
   },
   receiptBox: {
     marginTop: 10, height: 60, borderRadius: 12,
@@ -254,4 +363,42 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalCard: { backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
   modalRow: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
+  previewList: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 12, 
+    marginTop: 10 
+  },
+  thumbnailContainer: { 
+    width: 80, 
+    height: 80, 
+    position: 'relative' 
+  },
+  thumbnail: { 
+    width: '100%', 
+    height: '100%', 
+    borderRadius: 8, 
+    borderWidth: 1, 
+    borderColor: '#e2e8f0' 
+  },
+  deleteBadge: { 
+    position: 'absolute', // 必须有这个
+    top: -5,              // 向上偏一点
+    right: -5,            // 向右偏一点
+    backgroundColor: '#fff', 
+    borderRadius: 10,
+    zIndex: 10            // 确保不被图片遮住
+  },
+  uploadBtn: {
+    marginTop: 12,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc'
+  },
 });
