@@ -1,5 +1,4 @@
 // app/(tabs)/_layout.tsx
-import { t } from "@/core/i18n";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { AppProviders } from "@/services/Providers";
@@ -19,6 +18,7 @@ export default function TabsLayout() {
   return (
     <AppProviders>
       <Tabs
+        key={`tabs-${language}`}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: activeTintColor,
@@ -32,7 +32,8 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: t("groups"),
+            title: "",
+            tabBarLabel: "",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-outline" size={size} color={color} />
             ),
@@ -51,7 +52,8 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="settings"
           options={{
-            title: t("settings"),
+            title: "",
+            tabBarLabel: "",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="settings-outline" size={size} color={color} />
             ),

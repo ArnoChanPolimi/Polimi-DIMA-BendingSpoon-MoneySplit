@@ -1,6 +1,7 @@
 // components/group/GroupCard.tsx
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { t } from '@/core/i18n';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -26,17 +27,17 @@ export type Group = {
 };
 
 const typeLabelMap: Record<ExpenseType, string> = {
-  travel: 'Travel',
-  food: 'Food & drinks',
-  shopping: 'Shopping',
-  transport: 'Transport',
-  household: 'Household',
-  other: 'Other',
+  travel: t('typeTravel'),
+  food: t('typeFoodDrinks'),
+  shopping: t('typeShopping'),
+  transport: t('typeTransport'),
+  household: t('typeHousehold'),
+  other: t('typeOther'),
 };
 
 function formatDateRange(group: Group): string {
   if (!group.endDate) {
-    return `From ${group.startDate}`;
+    return `${t('from')} ${group.startDate}`;
   }
   return `${group.startDate} → ${group.endDate}`;
 }
@@ -52,7 +53,7 @@ export default function GroupCard({ group }: { group: Group }) {
         <View style={styles.headerRow}>
           {group.status === 'ongoing' && (
             <ThemedView style={styles.badge}>
-              <ThemedText style={styles.badgeText}>Not Finished</ThemedText>
+              <ThemedText style={styles.badgeText}>{t('notFinished')}</ThemedText>
             </ThemedView>
           )}
 
@@ -67,7 +68,7 @@ export default function GroupCard({ group }: { group: Group }) {
         {/* 成员 & 总额 */}
         <View style={styles.row}>
           <ThemedText>
-            {group.membersCount} members · {group.totalExpenses.toFixed(2)} €
+            {group.membersCount} {t('members')} · {group.totalExpenses.toFixed(2)} €
           </ThemedText>
         </View>
 
@@ -77,7 +78,7 @@ export default function GroupCard({ group }: { group: Group }) {
         </ThemedText>
 
         <ThemedText style={styles.hint}>
-          Tap to see balances and expenses
+          {t('tapToSeeBalances')}
         </ThemedText>
       </ThemedView>
     </Pressable>

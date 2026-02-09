@@ -1,3 +1,4 @@
+import { applyLocale } from "@/core/i18n";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useColorScheme as useRNColorScheme } from "react-native";
@@ -33,7 +34,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(KEY_LANG),
         ]);
         if (t === "system" || t === "light" || t === "dark") setThemeState(t);
-        if (l === "en" || l === "zh" || l === "it") setLanguageState(l);
+        const lang = (l === "en" || l === "zh" || l === "it") ? l : "en";
+        if (l === "en" || l === "zh" || l === "it") setLanguageState(lang);
+        applyLocale(lang); // 初始化时应用语言到 i18n
       } finally {
         setHydrated(true);
       }
@@ -54,6 +57,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = async (l: Language) => {
     setLanguageState(l);
     await AsyncStorage.setItem(KEY_LANG, l);
+    applyLocale(l); // 立即应用语言到 i18n
   };
 
   const value = useMemo(

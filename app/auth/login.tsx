@@ -100,7 +100,7 @@ export default function LoginScreen() {
           placeholder="Email"
           value={email}
           onChangeText={setEmail}
-          style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]}
+          style={[styles.input, { color: isDarkMode ? "#000" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]}
           placeholderTextColor={isDarkMode ? "#aaa" : "#888"}
           autoCapitalize="none"
           keyboardType="email-address"
@@ -111,7 +111,7 @@ export default function LoginScreen() {
             placeholder="Password"
             value={password}
             onChangeText={setPassword}
-            style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd", flex: 1 }]}
+            style={[styles.input, { color: isDarkMode ? "#000" : "#000", borderColor: isDarkMode ? "#555" : "#ddd", flex: 1 }]}
             placeholderTextColor={isDarkMode ? "#aaa" : "#888"}
             secureTextEntry={!passwordVisible}
           />
@@ -154,7 +154,7 @@ export default function LoginScreen() {
                 placeholder="Enter your email"
                 value={resetEmail}
                 onChangeText={setResetEmail}
-                style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]}
+                style={[styles.input, { color: isDarkMode ? "#000" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]}
                 placeholderTextColor={isDarkMode ? "#aaa" : "#888"}
                 autoCapitalize="none"
                 keyboardType="email-address"

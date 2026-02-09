@@ -5,7 +5,12 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
+import { CurrencySelector } from "@/components/ui/CurrencySelector";
 import PrimaryButton from "@/components/ui/PrimaryButton";
+import { useCurrency } from "@/core/currency/CurrencyContext";
+import { t } from "@/core/i18n";
+import { useSettings } from "@/core/settings/SettingsContext";
+import { Currency } from "@/services/exchangeRateApi";
 import { auth, db, uploadImageAndGetUrl } from "@/services/firebase";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
@@ -13,15 +18,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { addDoc, collection, getDocs } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View
 } from "react-native";
 
 type FriendRecord = {
@@ -36,10 +41,14 @@ export default function AddExpenseScreen() {
   // const { groupId } = useLocalSearchParams();
   const { groupId } = useLocalSearchParams<{ groupId?: string }>();
   const router = useRouter();
+  const { language } = useSettings();
+  const { defaultCurrency, convertAmount } = useCurrency();
 
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(defaultCurrency);
 
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   // 应该改为（默认只选你自己）：
@@ -175,6 +184,19 @@ export default function AddExpenseScreen() {
         cleanMyUid
       ]));
 
+      // --- Currency Conversion Logic ---
+      let convertedAmount = amountNum;
+      if (selectedCurrency !== defaultCurrency) {
+        const result = await convertAmount(amountNum, selectedCurrency, defaultCurrency);
+        if (result !== null) {
+          convertedAmount = result;
+        } else {
+          // API failed, use original amount as fallback
+          convertedAmount = amountNum;
+          console.warn(`Currency conversion failed for ${selectedCurrency} to ${defaultCurrency}`);
+        }
+      }
+
       // 2. 确定存储路径
       const collectionPath = groupId 
         ? collection(db, "groups", groupId as string, "expenses") 
@@ -183,7 +205,9 @@ export default function AddExpenseScreen() {
       // 3. 执行写入
       await addDoc(collectionPath, {
         title,
-        amount: amountNum,
+        amount: convertedAmount, // Store converted amount in default currency
+        originalAmount: amountNum, // Store original amount with its currency
+        originalCurrency: selectedCurrency, // Store the currency it was recorded in
         payerId: cleanMyUid, // 确保支付者是当前用户
         participants: finalParticipantIds, // 🔑 使用强制包含了自己的新数组
         notes: notes,
@@ -199,18 +223,34 @@ export default function AddExpenseScreen() {
     }
   };
 
+  // 刷新表单
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTitle('');
+    setTotalAmount('');
+    setNotes('');
+    setParticipantIds(auth.currentUser?.uid ? [auth.currentUser.uid] : []);
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
+
   return (
     <AppScreen>
-      <AppTopBar title="New expense" showBack />
+      <AppTopBar 
+        title={t("newExpense")} 
+        showBack 
+        showRefresh={true}
+        onRefreshPress={handleRefresh}
+        isRefreshing={isRefreshing}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">1 · Expense Name</ThemedText>
+          <ThemedText type="subtitle">{t("step1Title")}</ThemedText>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Dinner"
+            placeholder={t("expenseNamePlaceholder")}
             value={title}
             onChangeText={setTitle}
           />
@@ -226,28 +266,37 @@ export default function AddExpenseScreen() {
           />
 
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">3 · Amount</ThemedText>
+            <ThemedText type="subtitle">{t("step2Title")}</ThemedText>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
-              placeholder="0.00"
+              placeholder={t("amountPlaceholder")}
               value={totalAmount}
               onChangeText={setTotalAmount}
             />
           </View>
 
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">Optional · Notes</ThemedText>
+            <CurrencySelector
+              selectedCurrency={selectedCurrency}
+              onSelectCurrency={setSelectedCurrency}
+              label={t("recordCurrency")}
+            />
+          </View>
+
+          <View style={{ marginTop: 20 }}>
+            <ThemedText type="subtitle">{t("notesOptionalTitle")}</ThemedText>
             <TextInput
               style={[styles.input, { height: 100, textAlignVertical: "top" }]}
               multiline
+              placeholder={t("notesPlaceholder")}
               value={notes}
               onChangeText={setNotes}
             />
           </View>
           
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">4 · Receipt (Optional)</ThemedText>
+            <ThemedText type="subtitle">4 · {t("receipts")}</ThemedText>
             
             <Pressable 
               onPress={() => {
@@ -270,14 +319,14 @@ export default function AddExpenseScreen() {
                 /* FIX 3: 彻底删掉 pointerEvents: 'none'，让它变回正常的 View */
                 <View style={{ alignItems: 'center' }}> 
                   <Ionicons name="cloud-upload-outline" size={28} color="#9ca3af" />
-                  <ThemedText style={{ color: '#9ca3af', marginTop: 4 }}>Add Receipt Photo</ThemedText>
+                  <ThemedText style={{ color: '#9ca3af', marginTop: 4 }}>{t("receipts")}</ThemedText>
                 </View>
               )}
             </Pressable>
           </View>
 
           <View style={{ height: 24 }} />
-          <PrimaryButton label="Save expense" onPress={handleSave} />
+          <PrimaryButton label={t("addExpense")} onPress={handleSave} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -285,7 +334,7 @@ export default function AddExpenseScreen() {
         <View style={styles.modalOverlay}>
           <ThemedView style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <ThemedText type="defaultSemiBold">Add people</ThemedText>
+              <ThemedText type="defaultSemiBold">{t("step4Title")}</ThemedText>
               <Pressable onPress={() => { setShowAddPeople(false); setInviteSearch(""); }}>
                 <Ionicons name="close" size={20} />
               </Pressable>
@@ -294,7 +343,7 @@ export default function AddExpenseScreen() {
               {/* 1. 过滤掉自己后的好友列表逻辑 */}
               {friends.filter(f => f.uid !== auth.currentUser?.uid).length === 0 ? (
                 <View style={{ padding: 20, alignItems: 'center' }}>
-                  <ThemedText style={{ color: '#9ca3af' }}>You don't have any friends</ThemedText>
+                  <ThemedText style={{ color: '#9ca3af' }}>{t("noFriends") || "You don't have any friends"}</ThemedText>
                 </View>
               ) : (
                 friends.map((friend) => (
