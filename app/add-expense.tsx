@@ -6,6 +6,8 @@ import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import PrimaryButton from "@/components/ui/PrimaryButton";
+import { t } from "@/core/i18n";
+import { useSettings } from "@/core/settings/SettingsContext";
 import { auth, db, uploadImageAndGetUrl } from "@/services/firebase";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
@@ -13,15 +15,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { addDoc, collection, getDocs } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View
 } from "react-native";
 
 type FriendRecord = {
@@ -36,6 +38,7 @@ export default function AddExpenseScreen() {
   // const { groupId } = useLocalSearchParams();
   const { groupId } = useLocalSearchParams<{ groupId?: string }>();
   const router = useRouter();
+  const { language } = useSettings();
 
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
@@ -201,16 +204,16 @@ export default function AddExpenseScreen() {
 
   return (
     <AppScreen>
-      <AppTopBar title="New expense" showBack />
+      <AppTopBar title={t("newExpense")} showBack />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">1 · Expense Name</ThemedText>
+          <ThemedText type="subtitle">{t("step1Title")}</ThemedText>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Dinner"
+            placeholder={t("expenseNamePlaceholder")}
             value={title}
             onChangeText={setTitle}
           />
@@ -226,28 +229,29 @@ export default function AddExpenseScreen() {
           />
 
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">3 · Amount</ThemedText>
+            <ThemedText type="subtitle">{t("step2Title")}</ThemedText>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
-              placeholder="0.00"
+              placeholder={t("amountPlaceholder")}
               value={totalAmount}
               onChangeText={setTotalAmount}
             />
           </View>
 
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">Optional · Notes</ThemedText>
+            <ThemedText type="subtitle">{t("notesOptionalTitle")}</ThemedText>
             <TextInput
               style={[styles.input, { height: 100, textAlignVertical: "top" }]}
               multiline
+              placeholder={t("notesPlaceholder")}
               value={notes}
               onChangeText={setNotes}
             />
           </View>
           
           <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">4 · Receipt (Optional)</ThemedText>
+            <ThemedText type="subtitle">4 · {t("receipts")}</ThemedText>
             
             <Pressable 
               onPress={() => {
@@ -270,14 +274,14 @@ export default function AddExpenseScreen() {
                 /* FIX 3: 彻底删掉 pointerEvents: 'none'，让它变回正常的 View */
                 <View style={{ alignItems: 'center' }}> 
                   <Ionicons name="cloud-upload-outline" size={28} color="#9ca3af" />
-                  <ThemedText style={{ color: '#9ca3af', marginTop: 4 }}>Add Receipt Photo</ThemedText>
+                  <ThemedText style={{ color: '#9ca3af', marginTop: 4 }}>{t("receipts")}</ThemedText>
                 </View>
               )}
             </Pressable>
           </View>
 
           <View style={{ height: 24 }} />
-          <PrimaryButton label="Save expense" onPress={handleSave} />
+          <PrimaryButton label={t("addExpense")} onPress={handleSave} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -285,7 +289,7 @@ export default function AddExpenseScreen() {
         <View style={styles.modalOverlay}>
           <ThemedView style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <ThemedText type="defaultSemiBold">Add people</ThemedText>
+              <ThemedText type="defaultSemiBold">{t("step4Title")}</ThemedText>
               <Pressable onPress={() => { setShowAddPeople(false); setInviteSearch(""); }}>
                 <Ionicons name="close" size={20} />
               </Pressable>
@@ -294,7 +298,7 @@ export default function AddExpenseScreen() {
               {/* 1. 过滤掉自己后的好友列表逻辑 */}
               {friends.filter(f => f.uid !== auth.currentUser?.uid).length === 0 ? (
                 <View style={{ padding: 20, alignItems: 'center' }}>
-                  <ThemedText style={{ color: '#9ca3af' }}>You don't have any friends</ThemedText>
+                  <ThemedText style={{ color: '#9ca3af' }}>{t("noFriends") || "You don't have any friends"}</ThemedText>
                 </View>
               ) : (
                 friends.map((friend) => (

@@ -12,12 +12,15 @@ import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 // import defaultFriends from '../../assets/data/friends.json';
 import { ParticipantSection } from "@/components/expense/ParticipantSection";
+import { t } from '@/core/i18n';
+import { useSettings } from '@/core/settings/SettingsContext';
 
 import * as ImagePicker from 'expo-image-picker';
 
 
 export default function QuickAddScreen() {
   const router = useRouter();
+  const { language } = useSettings();
   const [groupName, setGroupName] = useState('');
   const [amount, setAmount] = useState('');
   const [receipts, setReceipts] = useState<string[]>([]);
@@ -225,10 +228,10 @@ export default function QuickAddScreen() {
 
   return (
     <AppScreen>
-      <AppTopBar title="New Expense Group" />
+      <AppTopBar title={t("newExpenseGroup")} />
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="subtitle" style={nameError ? { color: '#ef4444' } : {}}>
-          1 · Group Name {nameError && "(Already Exists!)"}
+          {t("groupNameTitle")} {nameError && t("alreadyExists")}
         </ThemedText>
         <TextInput 
           style={[styles.input, nameError && styles.inputError]} 
@@ -237,12 +240,12 @@ export default function QuickAddScreen() {
             setGroupName(text);
             if (nameError) setNameError(false);
           }} 
-          placeholder="e.g. Milano Pizza" 
+          placeholder={t("groupNamePlaceholder")} 
           editable={!loading}
         />
         {/* 支付者区域 */}
         {/* 支付者区域 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>2 · Who Paid? (Payers)</ThemedText>
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>{t("whoPaidTitle")}</ThemedText>
         <View style={styles.participantContainer}> 
           <ParticipantSection 
             selectedFriends={realFriends.filter(f => selectedPayers.includes(f.uid))}
@@ -256,8 +259,8 @@ export default function QuickAddScreen() {
           />
         </View>
 
-        {/* 分摊参与者区域 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>3 · Who Splits? (Participants)</ThemedText>
+        {/* 分摰参与者区域 */}
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>{t("whoSplitsTitle")}</ThemedText>
         <View style={styles.participantContainer}> 
           <ParticipantSection 
             selectedFriends={realFriends.filter(f => selectedParticipants.includes(f.uid))}
@@ -270,7 +273,7 @@ export default function QuickAddScreen() {
           />
         </View>
 
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>4 · Total Budget</ThemedText>
+        <ThemedText type="subtitle" style={{ marginTop: 16 }}>{t("totalBudgetTitle")}</ThemedText>
         <TextInput 
           style={styles.input} 
           value={amount} 
@@ -279,7 +282,7 @@ export default function QuickAddScreen() {
           placeholder="0.00" 
           editable={!loading}
         />
-        <ThemedText type="subtitle" style={styles.sectionTitle}>5 · Receipt (Optional)</ThemedText>
+        <ThemedText type="subtitle" style={styles.sectionTitle}>{t("receiptOptionalTitle")}</ThemedText>
         {/* 1. 图片预览区域 */}
         {/* A. 预览区域：放在标题下方 */}
         <View style={styles.previewList}>
@@ -306,14 +309,14 @@ export default function QuickAddScreen() {
         >
           <Ionicons name="cloud-upload-outline" size={24} color="#64748b" />
           <ThemedText style={{ color: '#64748b', marginLeft: 8 }}>
-            {receipts.length > 0 ? "Add More Receipts" : "Upload Receipt"}
+            {receipts.length > 0 ? t("addMoreReceipts") : t("uploadReceipt")}
           </ThemedText>
         </Pressable>
 
         <View style={{ height: 32 }} />
         
         <PrimaryButton 
-          label="Confirm & Generate Bill" 
+          label={t("confirmGenerateBill")} 
           onPress={handleSave} 
           disabled={loading}
           loading={loading}
@@ -324,11 +327,11 @@ export default function QuickAddScreen() {
         <Modal visible={showAddPeople} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
-              <ThemedText type="subtitle" style={{ marginBottom: 15 }}>Select Friends</ThemedText>
+              <ThemedText type="subtitle" style={{ marginBottom: 15 }}>{t("selectFriends")}</ThemedText>
               <ScrollView style={{ maxHeight: 300 }}>
                 {realFriends.length === 0 ? (
                   <View style={{ padding: 20, alignItems: 'center' }}>
-                    <ThemedText style={{ color: '#94a3b8' }}>Loading or No Friends Found...</ThemedText>
+                    <ThemedText style={{ color: '#94a3b8' }}>{t("loadingOrNoFriends")}</ThemedText>
                   </View>
                 ) : (
                   realFriends.map(f => (
@@ -348,7 +351,7 @@ export default function QuickAddScreen() {
                   ))
                 )}
               </ScrollView>
-              <PrimaryButton label="Done" onPress={() => setShowAddPeople(false)} />
+              <PrimaryButton label={t("done")} onPress={() => setShowAddPeople(false)} />
             </View>
           </View>
         </Modal>
