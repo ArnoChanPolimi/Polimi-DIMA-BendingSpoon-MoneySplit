@@ -2,7 +2,9 @@
 // import { useAuth } from "@/services/AuthContext";
 // 在 login.tsx 和 signup.tsx 中统一使用：
 import { useAuth } from "@/components/auth/AuthContext";
+import { auth, db } from '@/services/firebase'; // 确保你的 firebase 配置文件路径正确
 import { useRouter } from "expo-router";
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import React, { useState } from "react";
 import { Alert, Button, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -30,6 +32,28 @@ const handleLogin = async () => {
           "Email Not Verified", 
           "Please click the link in your email first."
         );
+      }
+
+      const user = auth.currentUser;
+      if (user) {
+        // 1. 定义要操作的数据库文档位置（users 集合下以用户 UID 命名的文档）
+        const userRef = doc(db, "users", user.uid);
+
+        // 改成这样：
+        const rawUsername = user.displayName || user.email?.split('@')[0] || "User";
+        // 在 handleLogin 内部
+        const userSnap = await getDoc(userRef); // 需要 import { getDoc }
+        const userData = userSnap.data();
+
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email?.toLowerCase() ?? "",
+          // 如果数据库里已经有 username 了，就用数据库的；没有才用 rawUsername
+          username: userData?.username || rawUsername, 
+          avatar: userData?.avatar || user.photoURL || "",
+          lastLogin: new Date().toISOString(),
+        }, { merge: true }); // merge 保证不覆盖已有数据，只补全字段
+        console.log("数据库文档已同步/补全");
       }
 
       // 3. 只有验证通过了，才允许进入主程序

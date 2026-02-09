@@ -15,6 +15,7 @@ type AppTopBarProps = {
   onRightPress?: () => void;
   rightIconName?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
+  renderRight?: () => React.ReactNode;
 };
 
 export default function AppTopBar({
@@ -25,6 +26,7 @@ export default function AppTopBar({
   onRightPress,
   rightIconName,
   onRightIconPress,
+  renderRight,
 }: AppTopBarProps) {
   // 主题颜色：让 icon / 文本 / 边框都随主题变化
   const textColor = useThemeColor({}, "text");
@@ -57,6 +59,7 @@ export default function AppTopBar({
       </ThemedText>
 
       <View style={styles.right}>
+        {renderRight && renderRight()}
         {rightLabel && (
           <Pressable
             onPress={onRightPress}

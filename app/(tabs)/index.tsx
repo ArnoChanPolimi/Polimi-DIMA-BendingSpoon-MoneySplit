@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { auth, db } from '@/services/firebase';
 // 导入统一的假数据源
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
-import { collection, onSnapshot, or, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, or, orderBy, query, where } from 'firebase/firestore';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -18,45 +18,60 @@ export default function GroupsScreen() {
   const [loading, setLoading] = useState(true);
 
   // 3. 实时监听云端数据库
+  // 新增状态：用于存储未读通知数量
+  const [unreadCount, setUnreadCount] = useState(0);
+
   useEffect(() => {
-    // 1. 初始进入立刻进入加载状态
     setLoading(true);
 
-    // 2. 🔥 核心：监听 Auth 状态，直到 Firebase 确定你是谁
+    // 1. 监听用户登录状态
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (!user) {
         setFirebaseGroups([]);
+        setUnreadCount(0);
         setLoading(false);
         return;
       }
 
-      // 3. 用户确定了，开始拉取属于你的数据
-      // 这里的逻辑：只看你是创建者，或者你在名单里的。
-      const q = query(
+      // --- [分支 A：群组数据监听器] ---
+      const groupQuery = query(
         collection(db, "groups"),
         or(
           where("ownerId", "==", user.uid),
           where("participantIds", "array-contains", user.uid)
-        )
-        // ⚠️ 极其重要：如果还没去后台点链接建索引，请务必先注释掉 orderBy
-        // orderBy("updatedAt", "desc") 
+        ),
+        orderBy("updatedAt", "desc") 
       );
 
-      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-        const docs = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        }));
-        
-        console.log("Synced documents count:", docs.length);
+      const unsubscribeGroups = onSnapshot(groupQuery, (snapshot) => {
+        const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setFirebaseGroups(docs);
         setLoading(false);
       }, (error) => {
-        console.error("Firestore error:", error);
+        console.error("Groups sync error:", error);
         setLoading(false);
       });
 
-      return () => unsubscribeSnapshot();
+      // --- [分支 B：未读消息/通知监听器] ---
+      // 逻辑：监听所有发给“我”且状态为“pending”的消息
+      const notificationQuery = query(
+        collection(db, "notifications"),
+        where("to", "==", user.uid),
+        where("status", "==", "pending")
+      );
+
+      const unsubscribeNotifications = onSnapshot(notificationQuery, (snapshot) => {
+        console.log("New notifications received, count:", snapshot.docs.length);
+        setUnreadCount(snapshot.docs.length);
+      }, (error) => {
+        console.error("Notifications sync error:", error);
+      });
+
+      // 返回清理函数：当用户注销或身份改变时，同时杀掉两个监听器
+      return () => {
+        unsubscribeGroups();
+        unsubscribeNotifications();
+      };
     });
 
     return () => unsubscribeAuth();
@@ -69,8 +84,24 @@ export default function GroupsScreen() {
 
   return (
     <AppScreen>
-      <AppTopBar title="My Expenses" />
-      
+      {/* 核心修改点：renderRight 必须写在组件标签内 */}
+      <AppTopBar 
+        title="My Expenses" 
+        renderRight={() => (
+          <Pressable 
+            onPress={() => router.push('/friends')} 
+            style={styles.notificationBtn}
+          >
+            <ThemedText style={{ fontSize: 24 }}>🔔</ThemedText> 
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <ThemedText style={styles.badgeText}>{unreadCount}</ThemedText>
+              </View>
+            )}
+          </Pressable>
+        )}
+      />
+          
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <ThemedText style={styles.subtitle}>
           Your shared bill groups and history.
@@ -196,5 +227,27 @@ const styles = StyleSheet.create({
     fontSize: 18, 
     fontWeight: '700', 
     color: '#2563eb' 
+  },
+  notificationBtn: {
+    padding: 4,
+    position: 'relative', // 必须有，否则红点定位会乱
+  },
+  badge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff', // 白边让红点更醒目
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   }
 });
