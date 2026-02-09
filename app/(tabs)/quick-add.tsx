@@ -225,7 +225,7 @@ export default function QuickAddScreen() {
 
   return (
     <AppScreen>
-      <AppTopBar title="New Expense Group" />
+      <AppTopBar title="New Expense" />
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="subtitle" style={nameError ? { color: '#ef4444' } : {}}>
           1 · Group Name {nameError && "(Already Exists!)"}

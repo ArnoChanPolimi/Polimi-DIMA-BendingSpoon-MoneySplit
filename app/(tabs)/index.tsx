@@ -12,6 +12,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
+import { Ionicons } from '@expo/vector-icons';
+import { getCurrentMonthSpend } from '../../services/statsManager'; // 确保路径正确
+
 
 export default function GroupsScreen() {
   const [firebaseGroups, setFirebaseGroups] = useState<any[]>([]);
@@ -20,6 +23,8 @@ export default function GroupsScreen() {
   // 3. 实时监听云端数据库
   // 新增状态：用于存储未读通知数量
   const [unreadCount, setUnreadCount] = useState(0);
+  // 新增：专门存本月总支出的状态
+  const [thisMonthAmount, setThisMonthAmount] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -43,9 +48,12 @@ export default function GroupsScreen() {
         orderBy("updatedAt", "desc") 
       );
 
-      const unsubscribeGroups = onSnapshot(groupQuery, (snapshot) => {
+      const unsubscribeGroups = onSnapshot(groupQuery, async (snapshot) => {
         const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setFirebaseGroups(docs);
+        // 新增：每当群组数据变动，重新计算本月金额
+        const total = await getCurrentMonthSpend(user.uid);
+        setThisMonthAmount(total);
         setLoading(false);
       }, (error) => {
         console.error("Groups sync error:", error);
@@ -106,6 +114,27 @@ export default function GroupsScreen() {
         <ThemedText style={styles.subtitle}>
           Your shared bill groups and history.
         </ThemedText>
+        {/* 个人消费统计仪表盘入口 */}
+        <Pressable 
+          style={styles.personalStatsCard}
+          // 💡 修改这里：确保路径直接指向 /user-report
+          onPress={() => router.push('/user-report')} 
+        >
+          <View style={styles.statsLeft}>
+            <ThemedText style={styles.statsSubtitle}>My Spending (This Month)</ThemedText>
+            {/* 这里稍后你可以改成动态获取的金额，现在先放着 */}
+            <ThemedText type="title" style={styles.statsMainAmount}>
+              {thisMonthAmount.toFixed(2)} €
+            </ThemedText>
+          </View>
+          
+          <View style={styles.statsRight}>
+            <View style={styles.chartCircle}>
+              <Ionicons name="trending-up" size={20} color="#2563eb" />
+            </View>
+            <ThemedText style={styles.viewDetailsText}>View Trends</ThemedText>
+          </View>
+        </Pressable>
 
         {loading && (
           <View style={styles.loader}>
@@ -170,7 +199,7 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { padding: 16 },
+  scrollContainer: { padding: 18},
   subtitle: { marginBottom: 20, opacity: 0.6, fontSize: 14 },
   loader: { padding: 20, alignItems: 'center' },
   card: { 
@@ -193,7 +222,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center',
-    marginBottom: 10 
+    marginBottom: 16 
   },
   statusPill: { 
     paddingHorizontal: 8, 
@@ -249,5 +278,51 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
-  }
+  },
+  personalStatsCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    // 增加阴影，使其在白色背景上浮现出来
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  statsLeft: {
+    flex: 1,
+  },
+  statsSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  statsMainAmount: {
+    color: '#0f172a',
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  statsRight: {
+    alignItems: 'center',
+  },
+  chartCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  viewDetailsText: {
+    fontSize: 10,
+    color: '#2563eb',
+    fontWeight: '600',
+  },
 });
