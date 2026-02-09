@@ -14,6 +14,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
+import { Ionicons } from '@expo/vector-icons';
+import { getCurrentMonthSpend } from '../../services/statsManager'; // 确保路径正确
+
 
 export default function GroupsScreen() {
   const { language } = useSettings();
@@ -24,6 +27,8 @@ export default function GroupsScreen() {
   // 3. 实时监听云端数据库
   // 新增状态：用于存储未读通知数量
   const [unreadCount, setUnreadCount] = useState(0);
+  // 新增：专门存本月总支出的状态
+  const [thisMonthAmount, setThisMonthAmount] = useState(0);
 
   // 持有 unsubscribe 函数的引用，以便手动刷新时使用
   const unsubscribeGroupsRef = useRef<(() => void) | null>(null);
@@ -160,6 +165,27 @@ export default function GroupsScreen() {
         <ThemedText style={styles.subtitle}>
           {t("yourSharedBillGroups")}
         </ThemedText>
+        {/* 个人消费统计仪表盘入口 */}
+        <Pressable 
+          style={styles.personalStatsCard}
+          // 💡 修改这里：确保路径直接指向 /user-report
+          onPress={() => router.push('/user-report')} 
+        >
+          <View style={styles.statsLeft}>
+            <ThemedText style={styles.statsSubtitle}>My Spending (This Month)</ThemedText>
+            {/* 这里稍后你可以改成动态获取的金额，现在先放着 */}
+            <ThemedText type="title" style={styles.statsMainAmount}>
+              {thisMonthAmount.toFixed(2)} €
+            </ThemedText>
+          </View>
+          
+          <View style={styles.statsRight}>
+            <View style={styles.chartCircle}>
+              <Ionicons name="trending-up" size={20} color="#2563eb" />
+            </View>
+            <ThemedText style={styles.viewDetailsText}>View Trends</ThemedText>
+          </View>
+        </Pressable>
 
         {loading && (
           <View style={styles.loader}>
@@ -224,7 +250,7 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { padding: 16 },
+  scrollContainer: { padding: 18},
   subtitle: { marginBottom: 20, opacity: 0.6, fontSize: 14 },
   loader: { padding: 20, alignItems: 'center' },
   card: { 
@@ -247,7 +273,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center',
-    marginBottom: 10 
+    marginBottom: 16 
   },
   statusPill: { 
     paddingHorizontal: 8, 
