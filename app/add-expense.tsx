@@ -5,11 +5,12 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
-import PrimaryButton from "@/components/ui/PrimaryButton";
 import { CurrencySelector } from "@/components/ui/CurrencySelector";
+import PrimaryButton from "@/components/ui/PrimaryButton";
+import { useCurrency } from "@/core/currency/CurrencyContext";
 import { t } from "@/core/i18n";
 import { useSettings } from "@/core/settings/SettingsContext";
-import { useCurrency } from "@/core/currency/CurrencyContext";
+import { Currency } from "@/services/exchangeRateApi";
 import { auth, db, uploadImageAndGetUrl } from "@/services/firebase";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
@@ -27,7 +28,6 @@ import {
     TextInput,
     View
 } from "react-native";
-import { Currency } from "@/services/exchangeRateApi";
 
 type FriendRecord = {
   uid: string;

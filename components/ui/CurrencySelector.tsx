@@ -1,10 +1,10 @@
-import React from "react";
-import { View, ScrollView, Pressable, StyleSheet } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { useThemeColor } from "@/hooks/use-theme-color";
-import { Currency, CURRENCY_SYMBOLS, CURRENCY_NAMES, SUPPORTED_CURRENCIES } from "@/services/exchangeRateApi";
+import { Currency, CURRENCY_NAMES, CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@/services/exchangeRateApi";
 import { Ionicons } from "@expo/vector-icons";
+import React from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 interface CurrencySelectorProps {
   selectedCurrency: Currency;
