@@ -1,12 +1,15 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.json",
   "compilerOptions": {
-    "strict": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
-    }
+      "@/*": ["./*"]
+    },
+    "strict": true,
+    "jsx": "react-native",
+    // ✨ 专门解决 React 导入报错的两个开关
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "**/*.ts",

@@ -3,7 +3,8 @@ import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+
 // 1. Firebase 核心引用
 import { auth, db } from '@/services/firebase';
 // 导入统一的假数据源
@@ -15,7 +16,6 @@ import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import { Ionicons } from '@expo/vector-icons';
-import { getCurrentMonthSpend } from '../../services/statsManager'; // 确保路径正确
 
 
 export default function GroupsScreen() {
@@ -257,7 +257,7 @@ export default function GroupsScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { padding: 18},
+  scrollContainer: { padding: 18 },
   subtitle: { marginBottom: 20, opacity: 0.6, fontSize: 14 },
   loader: { padding: 20, alignItems: 'center' },
   card: { 
@@ -286,7 +286,8 @@ const styles = StyleSheet.create({
   },
   statusText: { 
     fontSize: 8, 
-    fontFamily: 'PressStart2P_400Regular',
+    // 注意：如果报字体错误，请确保已加载 PressStart2P
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', 
   },
   billId: { 
     fontSize: 10, 
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
   },
   notificationBtn: {
     padding: 4,
-    position: 'relative', // 必须有，否则红点定位会乱
+    position: 'relative',
   },
   badge: {
     position: 'absolute',
@@ -330,14 +331,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff', // 白边让红点更醒目
+    borderColor: '#fff',
   },
   badgeText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
   },
-  // 蓝色像素风加号样式
   pixelPlusContainer: {
     width: 24,
     height: 24,
@@ -350,13 +350,57 @@ const styles = StyleSheet.create({
     width: 18,
     height: 6,
     backgroundColor: '#2563eb',
-    // 像素风：方角
   },
   pixelPlusVertical: {
     position: 'absolute',
     width: 6,
     height: 18,
     backgroundColor: '#2563eb',
-    // 像素风：方角
+  },
+
+  // ✨ 补全下方缺失的样式 ✨
+  personalStatsCard: {
+    backgroundColor: '#ffffff',
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  statsLeft: {
+    flex: 1,
+  },
+  statsSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  statsMainAmount: {
+    color: '#0f172a',
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  statsRight: {
+    alignItems: 'center',
+  },
+  chartCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  viewDetailsText: {
+    fontSize: 10,
+    color: '#2563eb',
+    fontWeight: '600',
   },
 });
