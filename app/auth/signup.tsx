@@ -1,22 +1,29 @@
 // app/auth/signup.tsx
 import { useAuth } from "@/components/auth/AuthContext";
+import { useSettings } from "@/core/settings/SettingsContext";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { sendEmailVerification } from "firebase/auth";
 import React, { useEffect, useState } from "react";
-import { Alert, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-
-import { sendEmailVerification } from "firebase/auth"; // 👈 添加这一行！
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { auth } from "../../services/firebase";
 
 export default function SignupScreen() {
   const { signup, checkEmailVerified } = useAuth();
   const router = useRouter();
-
+  const { resolvedTheme } = useSettings();
+  const isDarkMode = resolvedTheme === "dark";
+  
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState("Simple");
+  const [passwordStrengthColor, setPasswordStrengthColor] = useState("#ddd");
+
   // 1. 新增倒计时状态 (放在其他 useState 后面)
   const [timeLeft, setTimeLeft] = useState(60);
 
@@ -110,42 +117,86 @@ export default function SignupScreen() {
     }
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Create Account</Text>
+  const evaluatePasswordStrength = (password: string) => {
+    if (password.length < 6) {
+      setPasswordStrength("Simple");
+      setPasswordStrengthColor("#ef4444"); // Red
+      return 0.3;
+    }
+    if (password.match(/[A-Z]/) && password.match(/[0-9]/)) {
+      setPasswordStrength("Difficult");
+      setPasswordStrengthColor("#22c55e"); // Green
+      return 1;
+    }
+    setPasswordStrength("Moderate");
+    setPasswordStrengthColor("#f59e0b"); // Orange
+    return 0.6;
+  };
 
+  const handlePasswordChange = (password: string) => {
+    setPassword(password);
+    evaluatePasswordStrength(password);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: isDarkMode ? "#000" : "#fff" }]}>
+      <View style={styles.headerContainer}>
+        <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#000"} />
+        </Pressable>
+      </View>
+      <Text style={[styles.title, { color: isDarkMode ? "#fff" : "#333" }]}>Create Account</Text>
       {step === 1 && (
         <View style={styles.form}>
           {/* 输入框部分保持不变... */}
-          <TextInput placeholder="Username" value={username} onChangeText={setUsername} style={styles.input} autoCapitalize="none" />
-          <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} autoCapitalize="none" keyboardType="email-address" />
-          <TextInput placeholder="Password" value={password} onChangeText={setPassword} style={styles.input} secureTextEntry />
-          <TextInput placeholder="Confirm Password" value={password2} onChangeText={setPassword2} style={styles.input} secureTextEntry />
+          <TextInput placeholder="Username" value={username} onChangeText={setUsername} style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]} placeholderTextColor={isDarkMode ? "#aaa" : "#888"} autoCapitalize="none" />
+          <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]} placeholderTextColor={isDarkMode ? "#aaa" : "#888"} autoCapitalize="none" keyboardType="email-address" />
+          <View style={[styles.passwordInputContainer, { width: "100%" }]}>
+            <TextInput
+              placeholder="Password"
+              value={password}
+              onChangeText={handlePasswordChange}
+              style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd", flex: 1 }]}
+              secureTextEntry={!passwordVisible}
+              placeholderTextColor={isDarkMode ? "#aaa" : "#888"}
+            />
+            <Ionicons
+              name={passwordVisible ? "eye-off" : "eye"}
+              size={24}
+              onPress={() => setPasswordVisible(!passwordVisible)}
+              style={[styles.eyeIcon, { color: isDarkMode ? "#fff" : "#000" }]}
+            />
+          </View>
+          <View style={styles.passwordStrengthContainer}>
+            <View style={[styles.progressBar, { backgroundColor: passwordStrengthColor }]} />
+            <Text style={[styles.passwordStrengthText, { color: passwordStrengthColor }]}>{passwordStrength}</Text>
+          </View>
+          <TextInput placeholder="Confirm Password" value={password2} onChangeText={setPassword2} style={[styles.input, { color: isDarkMode ? "#fff" : "#000", borderColor: isDarkMode ? "#555" : "#ddd" }]} placeholderTextColor={isDarkMode ? "#aaa" : "#888"} secureTextEntry />
           
           <View style={styles.buttonSpacer} />
-          <View style={styles.buttonWrapper}>
-            <Button title={loading ? "Creating Account..." : "Sign Up"} onPress={handleSignup} disabled={loading} color="#007AFF" />
-          </View>
+          <Pressable onPress={handleSignup} disabled={loading} style={[styles.blueButton, { opacity: loading ? 0.6 : 1 }]}>
+            <Text style={styles.blueButtonText}>{loading ? "Creating Account..." : "Sign Up"}</Text>
+          </Pressable>
         </View>
       )}
 
       {step === 2 && (
         <View style={styles.verifyContainer}>
-          <View style={styles.infoBox}>
-            <Text style={styles.verifyText}>Verification email sent to:</Text>
-            <Text style={styles.emailText}>{email}</Text>
-            <Text style={styles.subText}>
+          <View style={[styles.infoBox, { backgroundColor: isDarkMode ? "#1a1a1a" : "#E6F4FE" }]}>
+            <Text style={[styles.verifyText, { color: isDarkMode ? "#ccc" : "#555" }]}>Verification email sent to:</Text>
+            <Text style={[styles.emailText, { color: isDarkMode ? "#60a5fa" : "#007AFF" }]}>{email}</Text>
+            <Text style={[styles.subText, { color: isDarkMode ? "#aaa" : "#666" }]}>
               Please check your inbox and click the link to activate your account.
             </Text>
 
             {/* ✅ 正确的位置：倒计时 UI 放在这里，而不是 styles 里 */}
             <View style={styles.timerBox}>
               {timeLeft > 0 ? (
-                <Text style={styles.timerActiveText}>
+                <Text style={[styles.timerActiveText, { color: isDarkMode ? "#60a5fa" : "#007AFF" }]}>
                   Checking status... {timeLeft}s
                 </Text>
               ) : (
-                <Text style={styles.timerEndText}>
+                <Text style={[styles.timerEndText, { color: isDarkMode ? "#f87171" : "#ef4444" }]}>
                   Timeout. Please resend if needed.
                 </Text>
               )}
@@ -153,20 +204,15 @@ export default function SignupScreen() {
           </View>
 
           <View style={styles.buttonGroup}>
-            <View style={styles.buttonWrapper}>
-              <Button title="I HAVE VERIFIED" onPress={handleVerified} color="#28a745" />
-            </View>
-            <View style={styles.buttonWrapper}>
-              <Button 
-                title={timeLeft > 0 ? `Resend in ${timeLeft}s` : "Resend Email"} 
-                onPress={handleResendEmail} 
-                disabled={timeLeft > 0} // 倒计时没走完，不让点
-                color="#FF9800" 
-              />
-            </View>
-            <View style={styles.buttonWrapper}>
-              <Button title="Back to Edit" onPress={() => setStep(1)} color="#666" />
-            </View>
+            <Pressable onPress={handleVerified} style={[styles.greenButton, { opacity: loading ? 0.6 : 1 }]}>
+              <Text style={styles.greenButtonText}>I HAVE VERIFIED</Text>
+            </Pressable>
+            <Pressable onPress={handleResendEmail} disabled={timeLeft > 0} style={[styles.orangeButton, { opacity: timeLeft > 0 ? 0.6 : 1 }]}>
+              <Text style={styles.orangeButtonText}>{timeLeft > 0 ? `Resend in ${timeLeft}s` : "Resend Email"}</Text>
+            </Pressable>
+            <Pressable onPress={() => setStep(1)} style={styles.grayButton}>
+              <Text style={styles.grayButtonText}>Back to Edit</Text>
+            </Pressable>
           </View>
         </View>
       )}
@@ -175,11 +221,28 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, justifyContent: "center", backgroundColor: "#fff" },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 32, textAlign: "center", color: "#333" },
-  form: { width: "100%" },
-  input: { borderWidth: 1, borderColor: "#ddd", padding: 14, marginBottom: 16, borderRadius: 10, backgroundColor: "#f9f9f9" },
-  buttonSpacer: { height: 10 },
+  container: { flexGrow: 1, padding: 24, justifyContent: "center" },
+  headerContainer: {
+    position: "absolute",
+    top: 24,
+    left: 24,
+    zIndex: 10,
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  title: { fontSize: 28, fontWeight: "bold", marginBottom: 32, textAlign: "center" },
+  form: { width: "100%", marginTop: 40 },
+  input: {
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+    borderRadius: 10,
+    backgroundColor: "#f9f9f9",
+    flex: 1,
+  },
+  buttonSpacer: { height: 30 },
   verifyContainer: { alignItems: "center", width: "100%" },
   infoBox: { backgroundColor: "#E6F4FE", padding: 20, borderRadius: 12, width: "100%", marginBottom: 30, alignItems: "center" },
   // ✅ 新增的倒计时样式
@@ -190,5 +253,75 @@ const styles = StyleSheet.create({
   emailText: { fontSize: 18, fontWeight: "bold", color: "#007AFF", marginBottom: 12, textAlign: "center" },
   subText: { fontSize: 14, color: "#666", textAlign: "center", lineHeight: 20 },
   buttonGroup: { width: "100%", alignItems: "center" },
-  buttonWrapper: { width: "100%", marginBottom: 12, borderRadius: 8, overflow: "hidden" }
+  buttonWrapper: { width: "100%", marginBottom: 12, borderRadius: 8, overflow: "hidden" },
+  passwordInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  eyeIcon: {
+    marginLeft: -30,
+  },
+  passwordStrengthContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 6,
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    width: 60,
+  },
+  passwordStrengthText: {
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  blueButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  blueButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  greenButton: {
+    backgroundColor: "#28a745",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  greenButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  orangeButton: {
+    backgroundColor: "#FF9800",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  orangeButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  grayButton: {
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  grayButtonText: {
+    color: "#666",
+    fontSize: 14,
+    fontWeight: "600",
+  },
 });
