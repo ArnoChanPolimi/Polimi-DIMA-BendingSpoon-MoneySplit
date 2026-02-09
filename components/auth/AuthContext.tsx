@@ -9,7 +9,7 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { auth, db } from '../../services/firebase';
 
@@ -42,12 +42,39 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
 
   // 监听用户状态
+  // 监听用户状态 (修改后的逻辑)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setLoading(false);
+    let unsubscribeFirestore: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // 当 Auth 状态存在时，开启对 Firestore 对应用户文档的实时监听
+        unsubscribeFirestore = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            // 将 Firestore 的数据（包含最新的 friends 数组）合并到 user 状态中
+            const firestoreData = docSnap.data();
+            const mergedUser = Object.assign(
+              Object.create(Object.getPrototypeOf(firebaseUser)), 
+              firebaseUser,
+              { ...firestoreData } // 关键：实时同步 friends 数组
+            );
+            setUser(mergedUser);
+          } else {
+            setUser(firebaseUser);
+          }
+          setLoading(false);
+        });
+      } else {
+        setUser(null);
+        if (unsubscribeFirestore) unsubscribeFirestore();
+        setLoading(false);
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeFirestore) unsubscribeFirestore();
+    };
   }, []);
 
   // 登录
@@ -57,21 +84,27 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   // 注册逻辑：包含存储用户名到 Firestore 且注册后自动登出
   const signup = async (email: string, password: string, username: string) => {
-    const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password);
-    
-    // 同步更新 Auth Profile
-    await updateProfile(newUser, { displayName: username });
+    // 1. 先在 Authentication 创建账号
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-    // 存储到 Firestore 云端
-    await setDoc(doc(db, 'users', newUser.uid), {
-      uid: newUser.uid,
-      email: newUser.email,
-      username: username,
+    await updateProfile(user, { displayName: username });
+
+    // 2. 核心动作：立刻在 Firestore 写入用户文档
+    await setDoc(doc(db, "users", user.uid), {
+      uid: user.uid,
+      username: username, // 使用注册时填写的用户名
+      email: email.toLowerCase(),
       createdAt: new Date().toISOString(),
+      avatar: "",
+      friends: [], // 必须加上这一行！初始化为空数组
     });
 
-    await sendEmailVerification(newUser);
-    await signOut(auth); // 强制登出，符合你的业务逻辑
+    // 3. 发送验证邮件
+    await sendEmailVerification(user);
+    
+    // 4. 根据你的业务逻辑决定是否先登出
+    // await signOut(auth);
   };
 
   // 登出
@@ -86,9 +119,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   // 检查邮箱验证状态
   const checkEmailVerified = async () => {
-    if (auth.currentUser) {
-      await auth.currentUser.reload();
-      return auth.currentUser.emailVerified;
+    // 1. 获取当前最实时的用户实例
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      try {
+        // 2. 强制从服务器拉取最新状态
+        await currentUser.reload();
+        
+        // 3. 检查重载后的属性
+        if (currentUser.emailVerified) {
+          // 关键：必须手动同步到 Context 状态，否则全局 User 还是旧的
+          // setUser({ ...currentUser } as any); 
+          const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(currentUser)), currentUser);
+          setUser(updatedUser);
+          return true;
+        }
+      } catch (error) {
+        console.error("Verification check failed:", error);
+      }
     }
     return false;
   };
@@ -101,8 +149,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     await updateProfile(auth.currentUser, { displayName: newUsername });
 
     // b. 修改 Firestore 数据库（确保云端有备份，merge 模式是对的）
+    // 在 updateUsername 函数内部找到 setDoc 部分
     await setDoc(doc(db, 'users', auth.currentUser.uid), {
-      username: newUsername
+      username: newUsername,
     }, { merge: true });
 
     // c. 强制刷新逻辑
@@ -111,10 +160,14 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     // 【关键修改点】：
     // 不要只依赖解构，我们要显式地把新名字塞进状态里
     // 这样 React 绝对能检测到 user.displayName 变了，UI 才会跳变
-    setUser({ 
-      ...auth.currentUser, 
-      displayName: newUsername 
-    } as any); 
+    // const updatedUser = auth.currentUser;
+    // setUser({ 
+    //   ...auth.currentUser, 
+    //   displayName: newUsername 
+    // } as any);
+    const currentUser = auth.currentUser;
+    const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(currentUser)), currentUser);
+    setUser(updatedUser);
 
     console.log("Updated username to:", newUsername);
   };
