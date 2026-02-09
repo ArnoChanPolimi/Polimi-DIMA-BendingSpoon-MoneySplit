@@ -1,49 +1,44 @@
-// app\(tabs)\quick-add.tsx
+// app/(tabs)/quick-add.tsx
+// 创建群组页面
 import { ThemedText } from '@/components/themed-text';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import { useThemeColor } from '@/hooks/use-theme-color'; // 补上这个，否则 useThemeColor 报错
+import { t } from '@/core/i18n';
 import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-// import defaultFriends from '../../assets/data/friends.json';
 import { ParticipantSection } from "@/components/expense/ParticipantSection";
-import { t } from '@/core/i18n';
-import { useSettings } from '@/core/settings/SettingsContext';
-
 import * as ImagePicker from 'expo-image-picker';
 
-
-export default function QuickAddScreen() {
+export default function CreateGroupScreen() {
   const router = useRouter();
-  const { language } = useSettings();
+  
+  // 群组基本信息
   const [groupName, setGroupName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [receipts, setReceipts] = useState<string[]>([]);
-  // 存放从 Firebase 捞出来的真实好友
+  const [groupDescription, setGroupDescription] = useState('');
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  
+  // 成员选择
   const [realFriends, setRealFriends] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false); 
-  const [processStep, setProcessStep] = useState<string>(''); 
-  const [nameError, setNameError] = useState(false); 
-  // 控制“添加好友”弹窗的显示/隐藏
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [showAddPeople, setShowAddPeople] = useState(false);
+  
+  // UI 状态
+  const [loading, setLoading] = useState(false);
+  const [processStep, setProcessStep] = useState<string>('');
+  const [nameError, setNameError] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 你的新“双轨制”状态
-  const [selectedPayers, setSelectedPayers] = useState<string[]>([]);      // 谁付钱
-  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]); // 谁分摊
-  const [targetType, setTargetType] = useState<'payer' | 'participant'>('payer');
-
-  // 增加一个 Effect 逻辑，去 Firebase 捞真人
+  // 从 Firebase 获取好友列表
   useEffect(() => {
     const loadRemoteFriends = async () => {
       const myUid = auth.currentUser?.uid;
       if (!myUid) return;
 
-      console.log("Fetching friends for:", myUid); // 加上 Log 让你能看到它在动
       const snap = await getDocs(collection(db, "users", myUid, "friends"));
       const list = snap.docs.map(doc => ({
         uid: doc.id,
@@ -52,17 +47,17 @@ export default function QuickAddScreen() {
       setRealFriends(list);
     };
     loadRemoteFriends();
-  }, [auth.currentUser?.uid, showAddPeople]); // 重点：当弹窗打开时，强制再刷一次，确保不丢人
+  }, [showAddPeople]);
 
-  const generateBillId = () => {
+  // 生成群组ID
+  const generateGroupId = () => {
     const datePart = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `GB-${datePart}-${randomPart}`;
+    return \`GRP-\${datePart}-\${randomPart}\`;
   };
 
-  // 选图逻辑
-  const pickImage = async () => {
-    // 规则：Web 端不请求权限，防止 "Receiving end does not exist" 报错
+  // 选择封面图片
+  const pickCoverImage = async () => {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -75,60 +70,48 @@ export default function QuickAddScreen() {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.5,
+        aspect: [16, 9],
+        quality: 0.7,
       });
 
-      console.log("QuickAdd Picker Result:", result);
-
       if (!result.canceled && result.assets) {
-        const newUri = result.assets[0].uri;
-        setReceipts(prev => [...prev, newUri]); // 累加图片
+        setCoverImage(result.assets[0].uri);
       }
     } catch (err) {
       console.error("Image pick failed:", err);
     }
   };
 
-  const handleSave = async () => {
+  // 创建群组
+  const handleCreateGroup = async () => {
     setNameError(false);
     setProcessStep('');
 
-    // 第一关：基础必填项检查
-    if (!groupName.trim() || !amount) {
-      if (!groupName.trim()) setNameError(true);
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    // 第二关：核心数据检查（你要加的是这一段，它是独立的！）
-    if ((selectedPayers.length > 0 || selectedParticipants.length > 0) && realFriends.length === 0) {
-      Alert.alert("Wait", "Friends list is still loading, please try again.");
+    // 校验群组名称
+    if (!groupName.trim()) {
+      setNameError(true);
+      Alert.alert(t("error"), t("enterGroupName"));
       return;
     }
 
     setLoading(true);
-    setProcessStep('Step 1: Connecting...'); 
+    setProcessStep('Connecting...');
 
     const myUid = auth.currentUser?.uid || "anon";
     const trimmedName = groupName.trim();
 
     try {
-      // 1. 生成唯一 ID (这是文件夹的名字)
-      const uniqueBillId = generateBillId(); 
+      const uniqueGroupId = generateGroupId();
 
-      // 2. 多图上传逻辑 (只写一遍！)
-      let uploadedUrls: string[] = [];
-      if (receipts.length > 0) {
-        setProcessStep(`Step 2: Uploading ${receipts.length} images...`);
-        // 并行上传
-        uploadedUrls = await Promise.all(
-          receipts.map(uri => uploadImageAndGetUrl(uri, uniqueBillId))
-        );
+      // 上传封面图片
+      let coverUrl = "";
+      if (coverImage) {
+        setProcessStep('Uploading cover...');
+        coverUrl = await uploadImageAndGetUrl(coverImage, uniqueGroupId);
       }
 
-      // 3. 查重
-      setProcessStep('Step 3: Checking name uniqueness...');
+      // 检查名称是否重复
+      setProcessStep('Checking name...');
       const groupsRef = collection(db, "groups");
       const nameQuery = query(groupsRef, where("name", "==", trimmedName));
       const querySnapshot = await getDocs(nameQuery);
@@ -136,301 +119,329 @@ export default function QuickAddScreen() {
       if (!querySnapshot.empty) {
         setLoading(false);
         setNameError(true);
-        setProcessStep('Duplicate Name!'); 
-        return; 
+        setProcessStep('');
+        Alert.alert(t("error"), t("alreadyExists"));
+        return;
       }
 
-      // 4. 保存到 Cloud
-      setProcessStep('Step 4: Saving...');
-
-      const allUniqueIds = Array.from(new Set([myUid, ...selectedPayers, ...selectedParticipants]));
+      // 构建成员列表（包含自己）
+      setProcessStep('Creating group...');
+      const allMemberIds = Array.from(new Set([myUid, ...selectedMembers]));
       
-      const finalFriendsData = realFriends
-        .filter(f => allUniqueIds.includes(f.uid))
-        .map(f => ({ 
-          uid: f.uid, 
-          displayName: f.displayName || f.email || "Unknown" 
+      const membersData = realFriends
+        .filter(f => allMemberIds.includes(f.uid))
+        .map(f => ({
+          uid: f.uid,
+          displayName: f.displayName || f.email || "Unknown"
         }));
 
-      const finalFriendsWithMe = [
+      const membersWithMe = [
         { uid: myUid, displayName: auth.currentUser?.displayName || "Me" },
-        ...finalFriendsData
-      ];  
+        ...membersData.filter(m => m.uid !== myUid)
+      ];
 
-      const groupDocRef = doc(db, "groups", uniqueBillId);
-
+      // 保存群组
+      const groupDocRef = doc(db, "groups", uniqueGroupId);
       await setDoc(groupDocRef, {
-        id: uniqueBillId,         
-        name: trimmedName,        
-        totalExpenses: parseFloat(amount),
-        ownerId: myUid, 
-        payerIds: selectedPayers.length > 0 ? selectedPayers : [myUid],
-        participantIds: allUniqueIds, // 
-        involvedFriends: finalFriendsWithMe, 
+        id: uniqueGroupId,
+        name: trimmedName,
+        description: groupDescription.trim(),
+        coverUrl: coverUrl,
+        ownerId: myUid,
+        participantIds: allMemberIds,
+        involvedFriends: membersWithMe,
+        totalExpenses: 0,
         updatedAt: Date.now(),
+        createdAt: Date.now(),
         status: 'ongoing',
-        startDate: new Date().toISOString().split('T')[0],
-        receiptUrls: uploadedUrls 
       });
-      // 1. 在 setDoc 之后插入
-      setProcessStep('Step 5: Notifying Friends...');
 
-      const currentUserName = auth.currentUser?.displayName || "A friend";
+      // 通知成员
+      setProcessStep('Notifying members...');
+      const currentUserName = auth.currentUser?.displayName || "Someone";
 
-      // 2. 为每个好友创建一条通知
-      const notificationPromises = allUniqueIds
-        .filter((uid: string) => uid !== myUid) // 显式加上类型
-        .map((friendUid: string) => {           // 显式加上类型
-          // 往全局 notifications 集合写数据，触发对方首页监听
-          const notifRef = doc(collection(db, "notifications")); 
+      const notificationPromises = allMemberIds
+        .filter((uid: string) => uid !== myUid)
+        .map((friendUid: string) => {
+          const notifRef = doc(collection(db, "notifications"));
           return setDoc(notifRef, {
             to: friendUid,
             fromId: myUid,
             fromName: currentUserName,
-            type: "new_group",    // 标记这是新账单通知
+            type: "new_group",
             groupName: trimmedName,
-            groupId: uniqueBillId,
-            status: "unread",     // 初始状态为未读，用于显示红点
+            groupId: uniqueGroupId,
+            status: "unread",
             createdAt: Date.now()
           });
         });
 
       await Promise.all(notificationPromises);
+
       setProcessStep('Success!');
       setTimeout(() => {
-        // 1. 清空所有状态
+        // 清空状态
         setGroupName('');
-        setAmount('');
-        setSelectedPayers([]);
-        setSelectedParticipants([]);
-        setReceipts([]);
+        setGroupDescription('');
+        setCoverImage(null);
+        setSelectedMembers([]);
         setLoading(false);
         setProcessStep('');
-        
-        // 2. 再执行跳转
-        router.replace('/(tabs)');
+
+        // 跳转到新创建的群组
+        router.push(\`/group/\${uniqueGroupId}\`);
       }, 500);
 
     } catch (e: any) {
       setLoading(false);
-      setProcessStep('Failed');
-      Alert.alert("Error", "Check your connection.");
+      setProcessStep('');
+      Alert.alert(t("error"), "Failed to create group. Please try again.");
+      console.error("Create group failed:", e);
     }
   };
 
-  // 主题色只算一次（不在每个 Chip 里算）
-  const borderColor = useThemeColor({}, "border");
-  const cardColor = useThemeColor({}, "card");
-
-  // 选中态颜色（保持你原有设计）
-  const selectedBg = "#2563eb";
-  const selectedBorder = "#2563eb";
+  // 刷新表单
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setGroupName('');
+    setGroupDescription('');
+    setCoverImage(null);
+    setSelectedMembers([]);
+    setNameError(false);
+    setProcessStep('');
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
 
   return (
     <AppScreen>
-      <AppTopBar title={t("newExpenseGroup")} />
+      <AppTopBar
+        title={t("newExpenseGroup")}
+        showRefresh={true}
+        onRefreshPress={handleRefresh}
+        isRefreshing={isRefreshing}
+      />
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="subtitle" style={nameError ? { color: '#ef4444' } : {}}>
-          {t("groupNameTitle")} {nameError && t("alreadyExists")}
+        
+        {/* 封面选择 */}
+        <ThemedText type="subtitle">{t("selectCover")}</ThemedText>
+        <Pressable style={styles.coverContainer} onPress={pickCoverImage}>
+          {coverImage ? (
+            <Image source={{ uri: coverImage }} style={styles.coverImage} />
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Ionicons name="image-outline" size={40} color="#9ca3af" />
+              <ThemedText style={{ color: '#9ca3af', marginTop: 8 }}>
+                {t("tapToSelectCover")}
+              </ThemedText>
+            </View>
+          )}
+          {coverImage && (
+            <Pressable
+              style={styles.coverEditBadge}
+              onPress={pickCoverImage}
+            >
+              <Ionicons name="camera" size={16} color="#fff" />
+            </Pressable>
+          )}
+        </Pressable>
+
+        {/* 群组名称 */}
+        <ThemedText type="subtitle" style={[styles.sectionTitle, nameError && { color: '#ef4444' }]}>
+          {t("groupNameTitle")} {nameError && \`(\${t("alreadyExists")})\`}
         </ThemedText>
-        <TextInput 
-          style={[styles.input, nameError && styles.inputError]} 
-          value={groupName} 
+        <TextInput
+          style={[styles.input, nameError && styles.inputError]}
+          value={groupName}
           onChangeText={(text) => {
             setGroupName(text);
             if (nameError) setNameError(false);
-          }} 
-          placeholder={t("groupNamePlaceholder")} 
+          }}
+          placeholder={t("groupNamePlaceholder")}
           editable={!loading}
         />
-        {/* 支付者区域 */}
-        {/* 支付者区域 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>{t("whoPaidTitle")}</ThemedText>
-        <View style={styles.participantContainer}> 
-          <ParticipantSection 
-            selectedFriends={realFriends.filter(f => selectedPayers.includes(f.uid))}
-            participantIds={selectedPayers} 
-            onToggle={(uid) => setSelectedPayers(prev => prev.filter(id => id !== uid))}
-            onAddPress={() => {
-              setTargetType('payer'); 
-              setShowAddPeople(true);
-            }} 
-            // 注意：不要在外面再包裹任何带有 "2. Participants" 字样的组件
-          />
-        </View>
 
-        {/* 分摰参与者区域 */}
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>{t("whoSplitsTitle")}</ThemedText>
-        <View style={styles.participantContainer}> 
-          <ParticipantSection 
-            selectedFriends={realFriends.filter(f => selectedParticipants.includes(f.uid))}
-            participantIds={selectedParticipants} 
-            onToggle={(uid) => setSelectedParticipants(prev => prev.filter(id => id !== uid))}
-            onAddPress={() => {
-              setTargetType('participant');
-              setShowAddPeople(true);
-            }} 
-          />
-        </View>
-
-        <ThemedText type="subtitle" style={{ marginTop: 16 }}>{t("totalBudgetTitle")}</ThemedText>
-        <TextInput 
-          style={styles.input} 
-          value={amount} 
-          onChangeText={setAmount} 
-          keyboardType="numeric" 
-          placeholder="0.00" 
+        {/* 群组描述 */}
+        <ThemedText type="subtitle" style={styles.sectionTitle}>
+          {t("groupDescription")}
+        </ThemedText>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={groupDescription}
+          onChangeText={setGroupDescription}
+          placeholder={t("groupDescriptionPlaceholder")}
+          multiline
+          numberOfLines={3}
           editable={!loading}
         />
-        <ThemedText type="subtitle" style={styles.sectionTitle}>{t("receiptOptionalTitle")}</ThemedText>
-        {/* 1. 图片预览区域 */}
-        {/* A. 预览区域：放在标题下方 */}
-        <View style={styles.previewList}>
-          {receipts.map((uri, index) => (
-            <View key={index} style={styles.thumbnailContainer}>
-              <Image source={{ uri }} style={styles.thumbnail} />
-              {/* 增加删除按键，点击触发 filter 过滤掉该索引的图 */}
-              <Pressable 
-                style={styles.deleteBadge} 
-                onPress={() => setReceipts(prev => prev.filter((_, i) => i !== index))}
-              >
-                <Ionicons name="close-circle" size={20} color="#ef4444" />
-              </Pressable>
-            </View>
-          ))}
+
+        {/* 选择成员 */}
+        <ThemedText type="subtitle" style={styles.sectionTitle}>
+          {t("selectMembers")}
+        </ThemedText>
+        <View style={styles.membersContainer}>
+          <ParticipantSection
+            selectedFriends={realFriends.filter(f => selectedMembers.includes(f.uid))}
+            participantIds={selectedMembers}
+            onToggle={(uid) => setSelectedMembers(prev => prev.filter(id => id !== uid))}
+            onAddPress={() => setShowAddPeople(true)}
+          />
         </View>
-        <Pressable 
-          style={({ pressed }) => [
-            styles.receiptBox, 
-            { opacity: pressed ? 0.7 : 1 },
-            Platform.OS === 'web' && ({ cursor: 'pointer' } as any)
-          ]} 
-          onPress={pickImage} 
-        >
-          <Ionicons name="cloud-upload-outline" size={24} color="#64748b" />
-          <ThemedText style={{ color: '#64748b', marginLeft: 8 }}>
-            {receipts.length > 0 ? t("addMoreReceipts") : t("uploadReceipt")}
-          </ThemedText>
-        </Pressable>
 
         <View style={{ height: 32 }} />
-        
-        <PrimaryButton 
-          label={t("confirmGenerateBill")} 
-          onPress={handleSave} 
+
+        <PrimaryButton
+          label={t("confirmGenerateBill")}
+          onPress={handleCreateGroup}
           disabled={loading}
           loading={loading}
           processStep={processStep}
         />
       </ScrollView>
-      {/* 1. 新增弹窗逻辑：用于响应点击 Add 后的操作 */}
-        <Modal visible={showAddPeople} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <ThemedText type="subtitle" style={{ marginBottom: 15 }}>{t("selectFriends")}</ThemedText>
-              <ScrollView style={{ maxHeight: 300 }}>
-                {realFriends.length === 0 ? (
-                  <View style={{ padding: 20, alignItems: 'center' }}>
-                    <ThemedText style={{ color: '#94a3b8' }}>{t("loadingOrNoFriends")}</ThemedText>
-                  </View>
-                ) : (
-                  realFriends.map(f => (
-                    <Pressable 
-                      key={f.uid} 
-                      onPress={() => {
-                        const setter = targetType === 'payer' ? setSelectedPayers : setSelectedParticipants;
-                        setter(prev => prev.includes(f.uid) ? prev.filter(u => u !== f.uid) : [...prev, f.uid]);
-                      }}
-                      style={styles.modalRow}
-                    >
-                      <ThemedText style={{ flex: 1 }}>{f.displayName || f.email}</ThemedText>
-                      { (targetType === 'payer' ? selectedPayers : selectedParticipants).includes(f.uid) && 
-                        <Ionicons name="checkmark" size={20} color="#2563eb" /> 
-                      }
-                    </Pressable>
-                  ))
-                )}
-              </ScrollView>
-              <PrimaryButton label={t("done")} onPress={() => setShowAddPeople(false)} />
+
+      {/* 选择成员弹窗 */}
+      <Modal visible={showAddPeople} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <ThemedText type="subtitle">{t("selectFriends")}</ThemedText>
+              <Pressable onPress={() => setShowAddPeople(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </Pressable>
             </View>
+            <ScrollView style={{ maxHeight: 350 }}>
+              {realFriends.length === 0 ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <ThemedText style={{ color: '#94a3b8' }}>{t("loadingOrNoFriends")}</ThemedText>
+                </View>
+              ) : (
+                realFriends.map(f => (
+                  <Pressable
+                    key={f.uid}
+                    onPress={() => {
+                      setSelectedMembers(prev =>
+                        prev.includes(f.uid)
+                          ? prev.filter(u => u !== f.uid)
+                          : [...prev, f.uid]
+                      );
+                    }}
+                    style={styles.modalRow}
+                  >
+                    <View style={styles.friendAvatar}>
+                      <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>
+                        {(f.displayName || 'U').charAt(0).toUpperCase()}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={{ flex: 1 }}>{f.displayName || f.email}</ThemedText>
+                    {selectedMembers.includes(f.uid) && (
+                      <Ionicons name="checkmark-circle" size={24} color="#2563eb" />
+                    )}
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+            <PrimaryButton label={t("done")} onPress={() => setShowAddPeople(false)} />
           </View>
-        </Modal>
+        </View>
+      </Modal>
     </AppScreen>
   );
-  
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 24, paddingHorizontal: 16 },
-  sectionTitle: { marginTop: 24, fontWeight: '600' },
+  content: {
+    paddingBottom: 24,
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    marginTop: 16,
+  },
   input: {
-    borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, // 增加圆角
-    paddingHorizontal: 16, paddingVertical: 12, marginTop: 8, 
-    backgroundColor: '#fff', fontSize: 16
-  },
-  participantContainer: {
-    paddingVertical: 20,
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 60, // 加上这个，防止组件缩成一团
-  },
-  receiptBox: {
-    marginTop: 10, height: 60, borderRadius: 12,
-    borderWidth: 1, borderColor: '#e2e8f0', borderStyle: 'dashed',
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#f8fafc'
-  },
-  inputError: { 
-    borderColor: '#ef4444', 
-    borderWidth: 2, 
-    backgroundColor: '#fff5f5' 
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#fff'
-  },
-  chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalCard: { backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  modalRow: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
-  previewList: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 12, 
-    marginTop: 10 
-  },
-  thumbnailContainer: { 
-    width: 80, 
-    height: 80, 
-    position: 'relative' 
-  },
-  thumbnail: { 
-    width: '100%', 
-    height: '100%', 
-    borderRadius: 8, 
-    borderWidth: 1, 
-    borderColor: '#e2e8f0' 
-  },
-  deleteBadge: { 
-    position: 'absolute', // 必须有这个
-    top: -5,              // 向上偏一点
-    right: -5,            // 向右偏一点
-    backgroundColor: '#fff', 
-    borderRadius: 10,
-    zIndex: 10            // 确保不被图片遮住
-  },
-  uploadBtn: {
-    marginTop: 12,
-    height: 50,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 8,
+    backgroundColor: '#fff',
+    fontSize: 16,
+  },
+  inputError: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
+    backgroundColor: '#fff5f5',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  coverContainer: {
+    marginTop: 8,
+    height: 160,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f1f5f9',
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  coverPlaceholder: {
+    flex: 1,
     justifyContent: 'center',
-    backgroundColor: '#f8fafc'
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+  },
+  coverEditBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  membersContainer: {
+    marginTop: 8,
+    minHeight: 50,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    alignItems: 'center',
+    gap: 12,
+  },
+  friendAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

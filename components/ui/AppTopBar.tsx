@@ -16,6 +16,12 @@ type AppTopBarProps = {
   rightIconName?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
   renderRight?: () => React.ReactNode;
+  /** 是否显示刷新按钮 */
+  showRefresh?: boolean;
+  /** 刷新按钮的点击回调 */
+  onRefreshPress?: () => void;
+  /** 是否正在刷新（用于显示加载动画） */
+  isRefreshing?: boolean;
 };
 
 export default function AppTopBar({
@@ -27,6 +33,9 @@ export default function AppTopBar({
   rightIconName,
   onRightIconPress,
   renderRight,
+  showRefresh = false,
+  onRefreshPress,
+  isRefreshing = false,
 }: AppTopBarProps) {
   // 主题颜色：让 icon / 文本 / 边框都随主题变化
   const textColor = useThemeColor({}, "text");
@@ -72,6 +81,22 @@ export default function AppTopBar({
             >
               {rightLabel}
             </ThemedText>
+          </Pressable>
+        )}
+
+        {showRefresh && (
+          <Pressable
+            onPress={onRefreshPress}
+            style={styles.iconWrapper}
+            hitSlop={10}
+            disabled={isRefreshing}
+          >
+            <Ionicons 
+              name="refresh" 
+              size={22} 
+              color={textColor}
+              style={isRefreshing ? { opacity: 0.5 } : {}}
+            />
           </Pressable>
         )}
 

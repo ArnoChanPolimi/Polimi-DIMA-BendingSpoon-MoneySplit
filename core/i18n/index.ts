@@ -30,6 +30,18 @@ const translations = {
 
     currency: "Currency",
     defaultCurrency: "Default currency",
+    currencyDemo: "💱 Currency Conversion Demo",
+    selectCurrency: "Select default currency",
+    exchangeRate: "📊 Live Exchange Rate",
+    refreshRate: "Refresh Rate",
+    quickConversion: "🔄 Quick Conversion Example",
+    expenseList: "📋 Expense List",
+    convertedTo: "Converted to",
+    featureInfo: "✨ Feature Info",
+    allExpensesConverted: "All expenses have been automatically converted to your selected currency",
+    clickToSwitch: "Click the buttons above to switch default currency",
+    ratesUpdateInRealTime: "Rates update in real-time after configuration",
+    resultsAutoSaved: "Conversion results are automatically saved for next session",
 
     notifications: "Notifications",
     expenseChanges: "Expense changes",
@@ -109,7 +121,7 @@ const translations = {
     demoAlertPeople: "People",
 
     // ===== Quick Add / Add Expense (Group Creation) =====
-    newExpenseGroup: "New Expense Group",
+    newExpenseGroup: "Create Group",
     groupNameTitle: "Group Name",
     alreadyExists: "Already exists",
     whoPaidTitle: "Who Paid?",
@@ -118,12 +130,17 @@ const translations = {
     receiptOptionalTitle: "Receipt (Optional)",
     addMoreReceipts: "Add More Receipts",
     uploadReceipt: "Upload Receipt",
-    confirmGenerateBill: "Generate Bill",
+    confirmGenerateBill: "Create Group",
     selectFriends: "Select Friends",
     loadingOrNoFriends: "Loading... or you don't have any friends",
     done: "Done",
     noFriends: "You don't have any friends",
     receipts: "Receipts",
+    selectCover: "Select Cover",
+    tapToSelectCover: "Tap to select cover image",
+    groupDescription: "Description (Optional)",
+    groupDescriptionPlaceholder: "What is this group for?",
+    selectMembers: "Select Members",
 
     // ===== Authentication / Signup =====
     createAccount: "Create Account",
@@ -186,6 +203,27 @@ If you have questions, please contact us through the app.`,
     success: "Success",
     sent: "Sent",
     pending: "Pending",
+
+    // ===== Pull to Refresh =====
+    refresh: "Refresh",
+    refreshing: "Refreshing...",
+    pullToRefresh: "Pull to refresh",
+    releaseToRefresh: "Release to refresh",
+    syncingWithCloud: "Syncing with cloud",
+
+    // ===== Currency Selection =====
+    recordCurrency: "Record currency",
+    selectRecordCurrency: "Select the currency for this expense",
+
+    // ===== Split Amounts =====
+    splitAmounts: "Split amounts",
+    enterAmount: "Enter amount",
+    me: "Me",
+    splitModeEqual: "Equal",
+    splitModeCustom: "Custom",
+    splitModeRatio: "Ratio",
+    perPerson: "per person",
+    enterRatio: "Ratio",
   },
 
   /* =========================
@@ -214,6 +252,18 @@ If you have questions, please contact us through the app.`,
 
     currency: "货币",
     defaultCurrency: "默认货币",
+    currencyDemo: "💱 货币转换演示",
+    selectCurrency: "选择默认货币",
+    exchangeRate: "📊 实时汇率",
+    refreshRate: "刷新汇率",
+    quickConversion: "🔄 快速转换示例",
+    expenseList: "📋 支出清单",
+    convertedTo: "已转换到",
+    featureInfo: "✨ 功能说明",
+    allExpensesConverted: "所有支出金额已自动转换到您选择的货币",
+    clickToSwitch: "点击上方按钮切换默认货币",
+    ratesUpdateInRealTime: "配置 API Key 后，汇率实时更新",
+    resultsAutoSaved: "转换结果自动保存，下次启动时恢复",
 
     notifications: "通知",
     expenseChanges: "消费变更",
@@ -286,21 +336,26 @@ If you have questions, please contact us through the app.`,
     demoAlertPeople: "参与人",
 
     // ===== Quick Add / Add Expense (Group Creation) =====
-    newExpenseGroup: "新建消费组",
-    groupNameTitle: "组名",
+    newExpenseGroup: "创建群组",
+    groupNameTitle: "群组名称",
     alreadyExists: "已存在",
     whoPaidTitle: "谁支付？",
-    whoSplitsTitle: "谁参与分摊？",
+    whoSplitsTitle: "谁参与分摆？",
     totalBudgetTitle: "总金额",
     receiptOptionalTitle: "小票（可选）",
     addMoreReceipts: "添加更多小票",
     uploadReceipt: "上传小票",
-    confirmGenerateBill: "生成账单",
+    confirmGenerateBill: "创建群组",
     selectFriends: "选择好友",
     loadingOrNoFriends: "加载中...或您还没有好友",
     done: "完成",
     noFriends: "您还没有好友",
     receipts: "小票",
+    selectCover: "选择封面",
+    tapToSelectCover: "点击选择封面图片",
+    groupDescription: "群组描述（可选）",
+    groupDescriptionPlaceholder: "这个群组用来做什么？",
+    selectMembers: "选择成员",
 
     // ===== Authentication / Signup =====
     createAccount: "创建账户",
@@ -367,6 +422,27 @@ MoneySplit 保留随时修改这些条款的权利。
     groups: "群组",
     friends: "好友",
     quickAdd: "新增",
+
+    // ===== Pull to Refresh =====
+    refresh: "刷新",
+    refreshing: "刷新中...",
+    pullToRefresh: "下拉刷新",
+    releaseToRefresh: "松开即可刷新",
+    syncingWithCloud: "正在同步云端数据",
+
+    // ===== Currency Selection =====
+    recordCurrency: "记账货币",
+    selectRecordCurrency: "选择此账单的记账货币",
+
+    // ===== Split Amounts =====
+    splitAmounts: "分摆金额",
+    enterAmount: "输入金额",
+    me: "我",
+    splitModeEqual: "人均",
+    splitModeCustom: "指定金额",
+    splitModeRatio: "按比例",
+    perPerson: "每人",
+    enterRatio: "比例",
   },
 
   /* =========================
@@ -395,6 +471,18 @@ MoneySplit 保留随时修改这些条款的权利。
 
     currency: "Valuta",
     defaultCurrency: "Valuta predefinita",
+    currencyDemo: "💱 Demo conversione valuta",
+    selectCurrency: "Seleziona valuta predefinita",
+    exchangeRate: "📊 Tasso di cambio in tempo reale",
+    refreshRate: "Aggiorna tasso",
+    quickConversion: "🔄 Esempio di conversione veloce",
+    expenseList: "📋 Elenco spese",
+    convertedTo: "Convertito a",
+    featureInfo: "✨ Info funzione",
+    allExpensesConverted: "Tutte le spese sono state automaticamente convertite nella valuta selezionata",
+    clickToSwitch: "Fare clic sui pulsanti sopra per cambiare la valuta predefinita",
+    ratesUpdateInRealTime: "I tassi si aggiornano in tempo reale dopo la configurazione",
+    resultsAutoSaved: "I risultati della conversione vengono salvati automaticamente per la prossima sessione",
 
     notifications: "Notifiche",
     expenseChanges: "Modifiche spese",
@@ -467,7 +555,7 @@ MoneySplit 保留随时修改这些条款的权利。
     demoAlertPeople: "Persone",
 
     // ===== Quick Add / Add Expense (Group Creation) =====
-    newExpenseGroup: "Nuovo Gruppo Spesa",
+    newExpenseGroup: "Crea Gruppo",
     groupNameTitle: "Nome Gruppo",
     alreadyExists: "Già esistente",
     whoPaidTitle: "Chi ha pagato?",
@@ -476,12 +564,17 @@ MoneySplit 保留随时修改这些条款的权利。
     receiptOptionalTitle: "Ricevuta (Opzionale)",
     addMoreReceipts: "Aggiungi Altre Ricevute",
     uploadReceipt: "Carica Ricevuta",
-    confirmGenerateBill: "Genera Conto",
+    confirmGenerateBill: "Crea Gruppo",
     selectFriends: "Seleziona Amici",
     loadingOrNoFriends: "Caricamento... o non hai amici",
     done: "Fatto",
     noFriends: "Non hai amici",
     receipts: "Ricevute",
+    selectCover: "Seleziona Copertina",
+    tapToSelectCover: "Tocca per selezionare l'immagine di copertina",
+    groupDescription: "Descrizione (Opzionale)",
+    groupDescriptionPlaceholder: "A cosa serve questo gruppo?",
+    selectMembers: "Seleziona Membri",
 
     // ===== Authentication / Signup =====
     createAccount: "Crea Account",
@@ -548,6 +641,27 @@ Se hai domande, contattaci attraverso l'app.`,
     groups: "Gruppi",
     friends: "Amici",
     quickAdd: "Nuovo",
+
+    // ===== Pull to Refresh =====
+    refresh: "Aggiorna",
+    refreshing: "Aggiornamento in corso...",
+    pullToRefresh: "Scorri verso il basso per aggiornare",
+    releaseToRefresh: "Rilascia per aggiornare",
+    syncingWithCloud: "Sincronizzazione con il cloud",
+
+    // ===== Currency Selection =====
+    recordCurrency: "Valuta di registrazione",
+    selectRecordCurrency: "Seleziona la valuta di registrazione per questa spesa",
+
+    // ===== Split Amounts =====
+    splitAmounts: "Importi di suddivisione",
+    enterAmount: "Inserisci importo",
+    me: "Io",
+    splitModeEqual: "Uguale",
+    splitModeCustom: "Personalizzato",
+    splitModeRatio: "Proporzione",
+    perPerson: "a persona",
+    enterRatio: "Proporzione",
   },
 };
 
