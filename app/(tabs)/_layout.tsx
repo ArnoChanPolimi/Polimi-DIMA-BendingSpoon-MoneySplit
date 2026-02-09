@@ -19,6 +19,7 @@ export default function TabsLayout() {
   return (
     <AppProviders>
       <Tabs
+        key={`tabs-${language}`}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: activeTintColor,
@@ -33,6 +34,7 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: t("groups"),
+            tabBarLabel: t("groups"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-outline" size={size} color={color} />
             ),
@@ -52,6 +54,7 @@ export default function TabsLayout() {
           name="settings"
           options={{
             title: t("settings"),
+            tabBarLabel: t("settings"),
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="settings-outline" size={size} color={color} />
             ),

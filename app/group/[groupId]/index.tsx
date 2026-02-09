@@ -469,6 +469,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
+import { t } from '@/core/i18n';
+import { useSettings } from '@/core/settings/SettingsContext';
 import * as ImagePicker from 'expo-image-picker';
 
 type InvolvedFriend = {
@@ -501,6 +503,7 @@ type ExpenseItem = {
 export default function GroupDetailScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const navigation = useNavigation();
+  const { language } = useSettings();
   
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -663,9 +666,9 @@ export default function GroupDetailScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 16 }}>
         <ThemedView style={styles.headerCard}>
           <View style={styles.idBadge}><ThemedText style={styles.idBadgeText}>BILL NO: {group.id}</ThemedText></View>
-          <ThemedText style={styles.dateText}>Created on {group.startDate}</ThemedText>
+          <ThemedText style={styles.dateText}>{t('created')} {group.startDate}</ThemedText>
           <ThemedText type="title" style={styles.totalAmount}>{group.totalExpenses.toFixed(2)} €</ThemedText>
-          <ThemedText style={styles.totalLabel}>Total Group Spending</ThemedText>
+          <ThemedText style={styles.totalLabel}>{t('totalSpending')}</ThemedText>
         </ThemedView>
 
         <ThemedText type="subtitle" style={styles.sectionTitle}>Group Members</ThemedText>
@@ -727,7 +730,7 @@ export default function GroupDetailScreen() {
       {/* 好友选择 Modal */}
       <Modal visible={isModalVisible} animationType="slide">
         <AppScreen>
-          <AppTopBar title="Add Members" showBack onBackPress={() => setIsModalVisible(false)} />
+          <AppTopBar title={t('step4Title')} showBack onBackPress={() => setIsModalVisible(false)} />
           <ScrollView style={{ padding: 16 }}>
             {/* “我”的选项 - 增加了显眼的样式 */}
             {auth.currentUser && (

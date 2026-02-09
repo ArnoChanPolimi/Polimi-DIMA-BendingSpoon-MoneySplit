@@ -1,4 +1,6 @@
 // app\(tabs)\index.tsx
+import { t } from '@/core/i18n';
+import { useSettings } from '@/core/settings/SettingsContext';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -14,6 +16,7 @@ import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 
 export default function GroupsScreen() {
+  const { language } = useSettings();
   const [firebaseGroups, setFirebaseGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -86,7 +89,7 @@ export default function GroupsScreen() {
     <AppScreen>
       {/* 核心修改点：renderRight 必须写在组件标签内 */}
       <AppTopBar 
-        title="My Expenses" 
+        title={t("myGroups")} 
         renderRight={() => (
           <Pressable 
             onPress={() => router.push('/friends')} 
@@ -104,13 +107,13 @@ export default function GroupsScreen() {
           
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <ThemedText style={styles.subtitle}>
-          Your shared bill groups and history.
+          {t("yourSharedBillGroups")}
         </ThemedText>
 
         {loading && (
           <View style={styles.loader}>
             <ActivityIndicator size="small" color="#2563eb" />
-            <ThemedText style={{fontSize: 12, marginTop: 8}}>Syncing with cloud...</ThemedText>
+            <ThemedText style={{fontSize: 12, marginTop: 8}}>{t("syncingWithCloud")}</ThemedText>
           </View>
         )}
 
@@ -129,7 +132,7 @@ export default function GroupsScreen() {
                 pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }
               ]}
             >
-              <ThemedView style={styles.cardContent}>
+                  <ThemedView style={styles.cardContent}>
                 <View style={styles.cardTop}>
                   {/* 修正：安全调用 toUpperCase */}
                   <View style={[
@@ -140,7 +143,7 @@ export default function GroupsScreen() {
                       styles.statusText, 
                       { color: status === 'ongoing' ? '#ef4444' : '#6b7280' }
                     ]}>
-                      ● {status.toUpperCase()} 
+                      ● {(status === 'ongoing' ? t('notFinished') : t('finished')).toUpperCase()} 
                     </ThemedText>
                   </View>
                   <ThemedText style={styles.billId}>{group.id}</ThemedText>
