@@ -1,14 +1,20 @@
 // components/ui/AppTopBar.tsx
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { PixelIcon } from "@/components/ui/PixelIcon";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+
+// 自定义刷新图标
+const REFRESH_ICON = require("@/assets/images/refresh.png");
 
 type AppTopBarProps = {
   title: string;
   showBack?: boolean;
+  /** 返回按钮大小 */
+  backSize?: number;
   /** 新增：可以自己决定返回去哪儿 */
   onBackPress?: () => void;
   rightLabel?: string;
@@ -27,6 +33,7 @@ type AppTopBarProps = {
 export default function AppTopBar({
   title,
   showBack = false,
+  backSize = 20,
   onBackPress,
   rightLabel,
   onRightPress,
@@ -40,10 +47,9 @@ export default function AppTopBar({
   // 主题颜色：让 icon / 文本 / 边框都随主题变化
   const textColor = useThemeColor({}, "text");
   const borderColor = useThemeColor({}, "border");
-  const backgroundColor = useThemeColor({}, "background");
 
   return (
-    <ThemedView style={[styles.container, { backgroundColor }]}>
+    <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
       {/* 左侧：可选返回按钮，占位保证标题居中 */}
       <View style={styles.left}>
         {showBack ? (
@@ -51,11 +57,7 @@ export default function AppTopBar({
             onPress={onBackPress ?? (() => router.back())}
             hitSlop={10}
           >
-            <Ionicons
-              name="chevron-back-outline"
-              size={20}
-              color={textColor}
-            />
+            <PixelIcon name="back" size={backSize} color={textColor} />
           </Pressable>
         ) : (
           <View style={{ width: 20 }} />
@@ -91,11 +93,13 @@ export default function AppTopBar({
             hitSlop={10}
             disabled={isRefreshing}
           >
-            <Ionicons 
-              name="refresh" 
-              size={22} 
-              color={textColor}
-              style={isRefreshing ? { opacity: 0.5 } : {}}
+            <Image 
+              source={REFRESH_ICON}
+              style={[
+                styles.refreshIcon,
+                isRefreshing && { opacity: 0.5 }
+              ]}
+              resizeMode="contain"
             />
           </Pressable>
         )}
@@ -149,5 +153,9 @@ const styles = StyleSheet.create({
   iconWrapper: {
     paddingHorizontal: 4,
     paddingVertical: 4,
+  },
+  refreshIcon: {
+    width: 24,
+    height: 24,
   },
 });

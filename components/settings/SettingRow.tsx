@@ -30,7 +30,7 @@ export default function SettingRow({ title, subtitle, onPress, right, icon }: Pr
               style={styles.iconStyle} 
             />
           )}
-          <ThemedText type="defaultSemiBold">{title}</ThemedText>
+          <ThemedText style={styles.pixelTitle}>{title}</ThemedText>
         </View>
         
         {subtitle && (
@@ -78,5 +78,10 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     opacity: 0.7,
+  },
+  pixelTitle: {
+    fontFamily: 'PressStart2P_400Regular',
+    fontSize: 10,
+    lineHeight: 16,
   },
 });

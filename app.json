@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "aasplitapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false, // true
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
@@ -48,11 +48,12 @@
           "photosPermission": "Allow aa-split-app to access your photos to upload receipts.",
           "cameraPermission": "Allow aa-split-app to access your camera to scan receipts."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": false // true
+      "reactCompiler": false
     }
   }
 }

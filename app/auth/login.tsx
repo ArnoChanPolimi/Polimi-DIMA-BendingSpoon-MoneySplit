@@ -1,5 +1,6 @@
 // app/auth/login.tsx
 import { useAuth } from "@/components/auth/AuthContext";
+import { PixelIcon } from "@/components/ui/PixelIcon";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -90,7 +91,7 @@ export default function LoginScreen() {
   return (
     <View style={[styles.screenContainer, { backgroundColor: isDarkMode ? "#000" : "#fff" }]}>
       <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={15}>
-        <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#000"} />
+        <PixelIcon name="back" size={24} color={isDarkMode ? "#fff" : "#000"} />
       </Pressable>
       <ScrollView contentContainerStyle={styles.container}>
       <Text style={[styles.title, { color: isDarkMode ? "#fff" : "#333" }]}>Welcome Back</Text>
@@ -227,8 +228,8 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, justifyContent: "center", paddingTop: 60 },
   backButton: {
     position: "absolute",
-    top: 24,
-    left: 24,
+    top: 56,
+    left: 16,
     zIndex: 10,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -237,14 +238,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 32, textAlign: "center" },
+  title: { fontSize: 16, fontFamily: "PressStart2P_400Regular", marginBottom: 32, textAlign: "center" },
   form: { width: "100%", marginTop: 40 },
   input: {
-    borderWidth: 1,
+    borderWidth: 3,
+    borderColor: "#60a5fa",
     padding: 14,
     marginBottom: 16,
-    borderRadius: 10,
-    backgroundColor: "#f9f9f9",
+    borderRadius: 0,
+    backgroundColor: "rgba(219, 234, 254, 0.7)",
   },
   passwordInputContainer: {
     flexDirection: "row",
@@ -257,16 +259,18 @@ const styles = StyleSheet.create({
   buttonSpacer: { height: 30 },
   buttonWrapper: { width: "100%", marginBottom: 12, borderRadius: 8, overflow: "hidden" },
   blueButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#2563eb",
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 0,
+    borderWidth: 3,
+    borderColor: "#1d4ed8",
     alignItems: "center",
     marginBottom: 12,
   },
   blueButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 10,
+    fontFamily: "PressStart2P_400Regular",
   },
   grayButton: {
     paddingVertical: 8,
@@ -331,8 +335,8 @@ const styles = StyleSheet.create({
     maxWidth: 400,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 12,
+    fontFamily: "PressStart2P_400Regular",
     marginBottom: 16,
     textAlign: "center",
   },

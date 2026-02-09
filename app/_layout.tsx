@@ -28,14 +28,19 @@
 //   );
 // }
 
+import { PressStart2P_400Regular, useFonts } from "@expo-google-fonts/press-start-2p";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 
 import { applyLocale } from "@/core/i18n";
 import { SettingsProvider, useSettings } from "@/core/settings/SettingsContext";
 // 必须导入这个
 import { AppProviders } from "@/services/Providers";
+
+// 防止启动屏幕自动隐藏
+SplashScreen.preventAutoHideAsync();
 
 function Inner() {
   const { resolvedTheme, language } = useSettings();
@@ -55,6 +60,21 @@ function Inner() {
 }
 
 export default function RootLayout() {
+  // 加载像素风字体
+  const [fontsLoaded] = useFonts({
+    PressStart2P_400Regular,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <SettingsProvider>
       <Inner />

@@ -11,7 +11,7 @@ interface Props {
 
 export default function SettingSection({ title, children }: Props) {
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
       <ThemedText type="subtitle" style={styles.title}>
         {title}
       </ThemedText>

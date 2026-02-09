@@ -146,7 +146,11 @@ export default function GroupsScreen() {
             onPress={() => router.push('/friends')} 
             style={styles.notificationBtn}
           >
-            <ThemedText style={{ fontSize: 24 }}>🔔</ThemedText> 
+            {/* 蓝色像素风加号 */}
+            <View style={styles.pixelPlusContainer}>
+              <View style={styles.pixelPlusHorizontal} />
+              <View style={styles.pixelPlusVertical} />
+            </View>
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <ThemedText style={styles.badgeText}>{unreadCount}</ThemedText>
@@ -185,16 +189,19 @@ export default function GroupsScreen() {
             >
                   <ThemedView style={styles.cardContent}>
                 <View style={styles.cardTop}>
-                  {/* 修正：安全调用 toUpperCase */}
+                  {/* 像素风状态标签 */}
                   <View style={[
                     styles.statusPill, 
-                    { backgroundColor: status === 'ongoing' ? '#fee2e2' : '#f3f4f6' }
+                    { 
+                      backgroundColor: status === 'ongoing' ? '#fecaca' : '#e5e7eb',
+                      borderColor: status === 'ongoing' ? '#ef4444' : '#9ca3af',
+                    }
                   ]}>
                     <ThemedText style={[
                       styles.statusText, 
-                      { color: status === 'ongoing' ? '#ef4444' : '#6b7280' }
+                      { color: status === 'ongoing' ? '#dc2626' : '#4b5563' }
                     ]}>
-                      ● {(status === 'ongoing' ? t('notFinished') : t('finished')).toUpperCase()} 
+                      {(status === 'ongoing' ? t('notFinished') : t('finished')).toUpperCase()} 
                     </ThemedText>
                   </View>
                   <ThemedText style={styles.billId}>{group.id}</ThemedText>
@@ -229,19 +236,15 @@ const styles = StyleSheet.create({
   loader: { padding: 20, alignItems: 'center' },
   card: { 
     marginBottom: 16, 
-    borderRadius: 16, 
+    borderRadius: 0,
     overflow: 'hidden',
-    elevation: 2, // 安卓阴影
-    shadowColor: '#000', // iOS 阴影
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderWidth: 3,
+    borderColor: '#60a5fa',
   },
   cardContent: {
     padding: 16,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+    backgroundColor: 'rgba(219, 234, 254, 0.7)',
+    borderWidth: 0,
   },
   cardTop: { 
     flexDirection: 'row', 
@@ -252,20 +255,23 @@ const styles = StyleSheet.create({
   statusPill: { 
     paddingHorizontal: 8, 
     paddingVertical: 4, 
-    borderRadius: 6 
+    borderRadius: 0,
+    borderWidth: 2,
   },
   statusText: { 
-    fontSize: 9, 
-    fontWeight: 'bold' 
+    fontSize: 8, 
+    fontFamily: 'PressStart2P_400Regular',
   },
   billId: { 
     fontSize: 10, 
     fontFamily: 'monospace', 
-    opacity: 0.4 
+    opacity: 0.5,
+    color: '#1f2937',
   },
   groupName: { 
     fontSize: 18,
-    color: '#1f2937'
+    fontWeight: '600',
+    color: '#1f2937',
   },
   cardBottom: { 
     flexDirection: 'row', 
@@ -275,12 +281,13 @@ const styles = StyleSheet.create({
   },
   dateText: { 
     fontSize: 12, 
-    opacity: 0.5 
+    opacity: 0.6,
+    color: '#1f2937',
   },
   amountText: { 
     fontSize: 18, 
-    fontWeight: '700', 
-    color: '#2563eb' 
+    fontWeight: '700',
+    color: '#2563eb',
   },
   notificationBtn: {
     padding: 4,
@@ -303,5 +310,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
-  }
+  },
+  // 蓝色像素风加号样式
+  pixelPlusContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  pixelPlusHorizontal: {
+    position: 'absolute',
+    width: 18,
+    height: 6,
+    backgroundColor: '#2563eb',
+    // 像素风：方角
+  },
+  pixelPlusVertical: {
+    position: 'absolute',
+    width: 6,
+    height: 18,
+    backgroundColor: '#2563eb',
+    // 像素风：方角
+  },
 });

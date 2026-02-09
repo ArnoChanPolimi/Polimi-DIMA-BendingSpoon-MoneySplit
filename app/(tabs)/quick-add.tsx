@@ -1,5 +1,6 @@
 // app/(tabs)/quick-add.tsx
 // 创建群组页面
+import { ParticipantSection } from "@/components/expense/ParticipantSection";
 import { ThemedText } from '@/components/themed-text';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
@@ -7,12 +8,11 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import { t } from '@/core/i18n';
 import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { ParticipantSection } from "@/components/expense/ParticipantSection";
-import * as ImagePicker from 'expo-image-picker';
 
 export default function CreateGroupScreen() {
   const router = useRouter();
@@ -53,7 +53,7 @@ export default function CreateGroupScreen() {
   const generateGroupId = () => {
     const datePart = new Date().toISOString().split('T')[0].replace(/-/g, '');
     const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return \`GRP-\${datePart}-\${randomPart}\`;
+    return `GRP-${datePart}-${randomPart}`;
   };
 
   // 选择封面图片
@@ -189,7 +189,7 @@ export default function CreateGroupScreen() {
         setProcessStep('');
 
         // 跳转到新创建的群组
-        router.push(\`/group/\${uniqueGroupId}\`);
+        router.push(`/group/${uniqueGroupId}`);
       }, 500);
 
     } catch (e: any) {
@@ -247,7 +247,7 @@ export default function CreateGroupScreen() {
 
         {/* 群组名称 */}
         <ThemedText type="subtitle" style={[styles.sectionTitle, nameError && { color: '#ef4444' }]}>
-          {t("groupNameTitle")} {nameError && \`(\${t("alreadyExists")})\`}
+          {t("groupNameTitle")} {nameError && `(${t("alreadyExists")})`}
         </ThemedText>
         <TextInput
           style={[styles.input, nameError && styles.inputError]}
@@ -257,6 +257,7 @@ export default function CreateGroupScreen() {
             if (nameError) setNameError(false);
           }}
           placeholder={t("groupNamePlaceholder")}
+          placeholderTextColor="#9ca3af"
           editable={!loading}
         />
 
@@ -269,6 +270,7 @@ export default function CreateGroupScreen() {
           value={groupDescription}
           onChangeText={setGroupDescription}
           placeholder={t("groupDescriptionPlaceholder")}
+          placeholderTextColor="#9ca3af"
           multiline
           numberOfLines={3}
           editable={!loading}
@@ -364,6 +366,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     backgroundColor: '#fff',
     fontSize: 16,
+    color: '#000',
   },
   inputError: {
     borderColor: '#ef4444',
@@ -379,7 +382,9 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     position: 'relative',
   },
   coverImage: {
@@ -391,10 +396,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
-    borderRadius: 12,
   },
   coverEditBadge: {
     position: 'absolute',
