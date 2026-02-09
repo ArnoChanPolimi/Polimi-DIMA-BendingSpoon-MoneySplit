@@ -6,9 +6,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import React, { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Alert, Animated, Dimensions, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { auth, db } from "../../services/firebase";
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function LoginScreen() {
   const { login, logout, checkEmailVerified } = useAuth();
@@ -24,6 +26,21 @@ export default function LoginScreen() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+
+  // 动画：图片从左到右循环移动
+  const translateX = useRef(new Animated.Value(-60)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      translateX.setValue(-60);
+      Animated.timing(translateX, {
+        toValue: SCREEN_WIDTH,
+        duration: 4000,
+        useNativeDriver: true,
+      }).start(() => animate());
+    };
+    animate();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -95,6 +112,18 @@ export default function LoginScreen() {
       </Pressable>
       <ScrollView contentContainerStyle={styles.container}>
       <Text style={[styles.title, { color: isDarkMode ? "#fff" : "#333" }]}>Welcome Back</Text>
+      
+      {/* 动画图片 - 从左到右移动 */}
+      <View style={styles.animationContainer}>
+        <Animated.Image
+          source={require("@/assets/images/login-animation.png")}
+          style={[
+            styles.animationImage,
+            { transform: [{ translateX }] }
+          ]}
+          resizeMode="contain"
+        />
+      </View>
       
       <View style={styles.form}>
         <TextInput
@@ -348,5 +377,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 16,
+  },
+  animationContainer: {
+    height: 45,
+    width: '100%',
+    overflow: 'hidden',
+    marginBottom: 0,
+  },
+  animationImage: {
+    width: 45,
+    height: 45,
   },
 });
