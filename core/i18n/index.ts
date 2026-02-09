@@ -205,6 +205,10 @@ If you have questions, please contact us through the app.`,
     pullToRefresh: "Pull to refresh",
     releaseToRefresh: "Release to refresh",
     syncingWithCloud: "Syncing with cloud",
+
+    // ===== Currency Selection =====
+    recordCurrency: "Record currency",
+    selectRecordCurrency: "Select the currency for this expense",
   },
 
   /* =========================
@@ -405,6 +409,10 @@ MoneySplit 保留随时修改这些条款的权利。
     pullToRefresh: "下拉刷新",
     releaseToRefresh: "松开即可刷新",
     syncingWithCloud: "正在同步云端数据",
+
+    // ===== Currency Selection =====
+    recordCurrency: "记账货币",
+    selectRecordCurrency: "选择此账单的记账货币",
   },
 
   /* =========================
@@ -605,6 +613,10 @@ Se hai domande, contattaci attraverso l'app.`,
     pullToRefresh: "Scorri verso il basso per aggiornare",
     releaseToRefresh: "Rilascia per aggiornare",
     syncingWithCloud: "Sincronizzazione con il cloud",
+
+    // ===== Currency Selection =====
+    recordCurrency: "Valuta di registrazione",
+    selectRecordCurrency: "Seleziona la valuta di registrazione per questa spesa",
   },
 };
 

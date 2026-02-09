@@ -6,8 +6,10 @@ import { ThemedView } from "@/components/themed-view";
 import AppScreen from "@/components/ui/AppScreen";
 import AppTopBar from "@/components/ui/AppTopBar";
 import PrimaryButton from "@/components/ui/PrimaryButton";
+import { CurrencySelector } from "@/components/ui/CurrencySelector";
 import { t } from "@/core/i18n";
 import { useSettings } from "@/core/settings/SettingsContext";
+import { useCurrency } from "@/core/currency/CurrencyContext";
 import { auth, db, uploadImageAndGetUrl } from "@/services/firebase";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
@@ -25,6 +27,7 @@ import {
     TextInput,
     View
 } from "react-native";
+import { Currency } from "@/services/exchangeRateApi";
 
 type FriendRecord = {
   uid: string;
@@ -39,11 +42,13 @@ export default function AddExpenseScreen() {
   const { groupId } = useLocalSearchParams<{ groupId?: string }>();
   const router = useRouter();
   const { language } = useSettings();
+  const { defaultCurrency, convertAmount } = useCurrency();
 
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(defaultCurrency);
 
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   // 应该改为（默认只选你自己）：
@@ -179,6 +184,19 @@ export default function AddExpenseScreen() {
         cleanMyUid
       ]));
 
+      // --- Currency Conversion Logic ---
+      let convertedAmount = amountNum;
+      if (selectedCurrency !== defaultCurrency) {
+        const result = await convertAmount(amountNum, selectedCurrency, defaultCurrency);
+        if (result !== null) {
+          convertedAmount = result;
+        } else {
+          // API failed, use original amount as fallback
+          convertedAmount = amountNum;
+          console.warn(`Currency conversion failed for ${selectedCurrency} to ${defaultCurrency}`);
+        }
+      }
+
       // 2. 确定存储路径
       const collectionPath = groupId 
         ? collection(db, "groups", groupId as string, "expenses") 
@@ -187,7 +205,9 @@ export default function AddExpenseScreen() {
       // 3. 执行写入
       await addDoc(collectionPath, {
         title,
-        amount: amountNum,
+        amount: convertedAmount, // Store converted amount in default currency
+        originalAmount: amountNum, // Store original amount with its currency
+        originalCurrency: selectedCurrency, // Store the currency it was recorded in
         payerId: cleanMyUid, // 确保支付者是当前用户
         participants: finalParticipantIds, // 🔑 使用强制包含了自己的新数组
         notes: notes,
@@ -253,6 +273,14 @@ export default function AddExpenseScreen() {
               placeholder={t("amountPlaceholder")}
               value={totalAmount}
               onChangeText={setTotalAmount}
+            />
+          </View>
+
+          <View style={{ marginTop: 20 }}>
+            <CurrencySelector
+              selectedCurrency={selectedCurrency}
+              onSelectCurrency={setSelectedCurrency}
+              label={t("recordCurrency")}
             />
           </View>
 

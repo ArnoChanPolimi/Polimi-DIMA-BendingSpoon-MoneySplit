@@ -3,8 +3,10 @@ import { ThemedText } from '@/components/themed-text';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import PrimaryButton from '@/components/ui/PrimaryButton';
+import { CurrencySelector } from '@/components/ui/CurrencySelector';
 import { useThemeColor } from '@/hooks/use-theme-color'; // 补上这个，否则 useThemeColor 报错
 import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
+import { useCurrency } from '@/core/currency/CurrencyContext';
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
@@ -14,6 +16,7 @@ import { Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextI
 import { ParticipantSection } from "@/components/expense/ParticipantSection";
 import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
+import { Currency } from '@/services/exchangeRateApi';
 
 import * as ImagePicker from 'expo-image-picker';
 
@@ -21,9 +24,11 @@ import * as ImagePicker from 'expo-image-picker';
 export default function QuickAddScreen() {
   const router = useRouter();
   const { language } = useSettings();
+  const { defaultCurrency, convertAmount } = useCurrency();
   const [groupName, setGroupName] = useState('');
   const [amount, setAmount] = useState('');
   const [receipts, setReceipts] = useState<string[]>([]);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>(defaultCurrency);
   // 存放从 Firebase 捞出来的真实好友
   const [realFriends, setRealFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(false); 
@@ -33,7 +38,7 @@ export default function QuickAddScreen() {
   // 控制"添加好友"弹窗的显示/隐藏
   const [showAddPeople, setShowAddPeople] = useState(false);
 
-  // 你的新“双轨制”状态
+  // 你的新"双轨制"状态
   const [selectedPayers, setSelectedPayers] = useState<string[]>([]);      // 谁付钱
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]); // 谁分摊
   const [targetType, setTargetType] = useState<'payer' | 'participant'>('payer');
@@ -156,14 +161,29 @@ export default function QuickAddScreen() {
       const finalFriendsWithMe = [
         { uid: myUid, displayName: auth.currentUser?.displayName || "Me" },
         ...finalFriendsData
-      ];  
+      ];
+
+      // --- Currency Conversion Logic ---
+      const amountNum = parseFloat(amount);
+      let convertedAmount = amountNum;
+      if (selectedCurrency !== defaultCurrency) {
+        const result = await convertAmount(amountNum, selectedCurrency, defaultCurrency);
+        if (result !== null) {
+          convertedAmount = result;
+        } else {
+          convertedAmount = amountNum;
+          console.warn(`Currency conversion failed for ${selectedCurrency} to ${defaultCurrency}`);
+        }
+      }
 
       const groupDocRef = doc(db, "groups", uniqueBillId);
 
       await setDoc(groupDocRef, {
         id: uniqueBillId,         
         name: trimmedName,        
-        totalExpenses: parseFloat(amount),
+        totalExpenses: convertedAmount,
+        originalAmount: amountNum,
+        originalCurrency: selectedCurrency,
         ownerId: myUid, 
         payerIds: selectedPayers.length > 0 ? selectedPayers : [myUid],
         participantIds: allUniqueIds, // 
@@ -301,6 +321,15 @@ export default function QuickAddScreen() {
           placeholder="0.00" 
           editable={!loading}
         />
+
+        <View style={{ marginTop: 16 }}>
+          <CurrencySelector
+            selectedCurrency={selectedCurrency}
+            onSelectCurrency={setSelectedCurrency}
+            label={t("recordCurrency")}
+          />
+        </View>
+
         <ThemedText type="subtitle" style={styles.sectionTitle}>{t("receiptOptionalTitle")}</ThemedText>
         {/* 1. 图片预览区域 */}
         {/* A. 预览区域：放在标题下方 */}
