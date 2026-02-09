@@ -9,7 +9,7 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { auth, db } from '../../services/firebase';
 
@@ -153,6 +153,30 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     await setDoc(doc(db, 'users', auth.currentUser.uid), {
       username: newUsername,
     }, { merge: true });
+
+    // --- 新增：时刻覆盖更新所有好友处的 displayName ---
+    try {
+      const myUid = auth.currentUser.uid;
+      // 1. 找到我所有的好友（读取我的红圈子集合）
+      const myFriendsRef = collection(db, "users", myUid, "friends");
+      const snapshot = await getDocs(myFriendsRef);
+      
+      if (!snapshot.empty) {
+        const batch = writeBatch(db);
+        snapshot.forEach((friendDoc) => {
+          const friendUid = friendDoc.id;
+          // 2. 找到对方好友列表里关于“我”的文档路径
+          const friendSideRef = doc(db, "users", friendUid, "friends", myUid);
+          // 3. 覆盖更新
+          batch.update(friendSideRef, { displayName: newUsername });
+        });
+        await batch.commit();
+        console.log("Success: All friends' lists updated with new name.");
+      }
+    } catch (err) {
+      console.error("Failed to sync name to friends:", err);
+    }
+    // ----------------------------------------------
 
     // c. 强制刷新逻辑
     await auth.currentUser.reload();
