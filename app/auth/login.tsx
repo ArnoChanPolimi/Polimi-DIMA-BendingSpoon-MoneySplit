@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -87,12 +88,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: isDarkMode ? "#000" : "#fff" }]}>
-      <View style={styles.headerContainer}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#000"} />
-        </Pressable>
-      </View>
+    <View style={[styles.screenContainer, { backgroundColor: isDarkMode ? "#000" : "#fff" }]}>
+      <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={15}>
+        <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#000"} />
+      </Pressable>
+      <ScrollView contentContainerStyle={styles.container}>
       <Text style={[styles.title, { color: isDarkMode ? "#fff" : "#333" }]}>Welcome Back</Text>
       
       <View style={styles.form}>
@@ -132,9 +132,18 @@ export default function LoginScreen() {
           <Text style={[styles.forgotPasswordText, { color: isDarkMode ? "#60a5fa" : "#007AFF" }]}>Forgot Password?</Text>
         </Pressable>
 
-        <Pressable onPress={handleSignup} style={styles.grayButton}>
-          <Text style={styles.grayButtonText}>Don't have an account? Sign up</Text>
-        </Pressable>
+        <View style={styles.signupContainer}>
+          <Text style={[styles.signupText, { color: isDarkMode ? "#999" : "#666" }]}>Don't have an account? </Text>
+          <Pressable onPress={handleSignup}>
+            <Text style={styles.signupLink}>Sign up</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.termsLinkContainer}>
+          <Pressable onPress={() => setShowTerms(true)}>
+            <Text style={[styles.termsLink, { color: isDarkMode ? "#60a5fa" : "#007AFF" }]}>View Terms and Conditions</Text>
+          </Pressable>
+        </View>
 
         {showForgotPassword && (
           <View style={styles.modalOverlay}>
@@ -161,22 +170,72 @@ export default function LoginScreen() {
             </View>
           </View>
         )}
+
+        {showTerms && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: isDarkMode ? "#1a1a1a" : "#fff", maxHeight: "80%" }]}>
+              <Text style={[styles.modalTitle, { color: isDarkMode ? "#fff" : "#000" }]}>Terms and Conditions</Text>
+              
+              <ScrollView style={styles.termsContent}>
+                <Text style={[styles.termsBody, { color: isDarkMode ? "#ccc" : "#333" }]}>
+{`1. User Agreement
+By using MoneySplit, you agree to these terms and conditions.
+
+2. Account Responsibility
+You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account.
+
+3. Acceptable Use
+You agree not to use MoneySplit for any unlawful or prohibited purpose. You agree to comply with all laws, rules, and regulations applicable to your use of the service.
+
+4. User Content
+You retain ownership of any content you submit, post, or display on MoneySplit. By submitting content, you grant MoneySplit a non-exclusive, worldwide, royalty-free license to use, copy, reproduce, process, adapt, modify, publish, transmit, display, and distribute such content in any media.
+
+5. Privacy
+Your use of MoneySplit is also governed by our Privacy Policy. Please review our Privacy Policy to understand our privacy practices.
+
+6. Limitation of Liability
+MoneySplit and its creators are not liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use the service.
+
+7. Termination
+We may terminate or suspend your account immediately, without prior notice or liability, for any reason whatsoever, including if you breach the Terms and Conditions.
+
+8. Changes to Terms
+MoneySplit reserves the right to modify these terms at any time. Changes will be effective immediately upon posting. Your continued use of the service following the posting of revised terms means that you accept and agree to the changes.
+
+9. Governing Law
+These Terms and Conditions are governed by and construed in accordance with the laws of the jurisdiction in which MoneySplit operates.
+
+10. Contact
+If you have any questions about these Terms and Conditions, please contact us through the app.`}
+                </Text>
+              </ScrollView>
+
+              <Pressable onPress={() => setShowTerms(false)} style={styles.blueButton}>
+                <Text style={styles.blueButtonText}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, justifyContent: "center" },
-  headerContainer: {
+  screenContainer: { flex: 1 },
+  container: { flexGrow: 1, padding: 24, justifyContent: "center", paddingTop: 60 },
+  backButton: {
     position: "absolute",
     top: 24,
     left: 24,
     zIndex: 10,
-  },
-  backButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    minHeight: 48,
+    minWidth: 48,
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: { fontSize: 28, fontWeight: "bold", marginBottom: 32, textAlign: "center" },
   form: { width: "100%", marginTop: 40 },
@@ -210,23 +269,48 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   grayButton: {
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderRadius: 10,
     alignItems: "center",
     marginBottom: 12,
   },
   grayButtonText: {
     color: "#666",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
   },
   forgotPasswordButton: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 8,
     paddingVertical: 12,
   },
   forgotPasswordText: {
     fontSize: 14,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  signupContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  signupText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  signupLink: {
+    color: "#007AFF",
+    fontSize: 12,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+  termsLinkContainer: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  termsLink: {
+    fontSize: 11,
     fontWeight: "600",
     textDecorationLine: "underline",
   },
@@ -251,5 +335,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 16,
     textAlign: "center",
+  },
+  termsContent: {
+    marginBottom: 16,
+    maxHeight: 300,
+  },
+  termsBody: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 16,
   },
 });
