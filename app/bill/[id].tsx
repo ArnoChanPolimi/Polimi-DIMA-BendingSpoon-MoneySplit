@@ -39,12 +39,17 @@ export default function BillDetailScreen() {
         const docSnap = await getDoc(doc(db, "expenses", id as string));
         if (docSnap.exists()) {
             const data = docSnap.data();
-            setBillData(data);
-            
-            // 2. 如果账单里有图片路径，去 Storage 换取真实图片链接
+            setBillData(data); 
+
+            // --- 新增：把假名单换成真名单 ---
+            if (data.participants) { // 假设你在数据库里存的名字叫 participants
+                setParticipants(data.participants); 
+            }
+            // ----------------------------
+
             if (data.receiptPath) {
-            const url = await getDownloadURL(ref(storage, data.receiptPath));
-            setReceiptUrl(url);
+                const url = await getDownloadURL(ref(storage, data.receiptPath));
+                setReceiptUrl(url);
             }
         }
         } catch (e) {

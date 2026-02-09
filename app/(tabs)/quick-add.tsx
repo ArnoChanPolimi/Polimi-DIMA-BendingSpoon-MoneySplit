@@ -140,7 +140,7 @@ export default function QuickAddScreen() {
       // 4. 保存到 Cloud
       setProcessStep('Step 4: Saving...');
 
-      const allUniqueIds = Array.from(new Set([...selectedPayers, ...selectedParticipants]));
+      const allUniqueIds = Array.from(new Set([myUid, ...selectedPayers, ...selectedParticipants]));
       
       const finalFriendsData = realFriends
         .filter(f => allUniqueIds.includes(f.uid))
@@ -149,6 +149,11 @@ export default function QuickAddScreen() {
           displayName: f.displayName || f.email || "Unknown" 
         }));
 
+      const finalFriendsWithMe = [
+        { uid: myUid, displayName: auth.currentUser?.displayName || "Me" },
+        ...finalFriendsData
+      ];  
+
       const groupDocRef = doc(db, "groups", uniqueBillId);
 
       await setDoc(groupDocRef, {
@@ -156,14 +161,38 @@ export default function QuickAddScreen() {
         name: trimmedName,        
         totalExpenses: parseFloat(amount),
         ownerId: myUid, 
-        payerIds: selectedPayers, 
-        participantIds: selectedParticipants,
-        involvedFriends: finalFriendsData, 
+        payerIds: selectedPayers.length > 0 ? selectedPayers : [myUid],
+        participantIds: allUniqueIds, // 
+        involvedFriends: finalFriendsWithMe, 
         updatedAt: Date.now(),
         status: 'ongoing',
         startDate: new Date().toISOString().split('T')[0],
         receiptUrls: uploadedUrls 
       });
+      // 1. 在 setDoc 之后插入
+      setProcessStep('Step 5: Notifying Friends...');
+
+      const currentUserName = auth.currentUser?.displayName || "A friend";
+
+      // 2. 为每个好友创建一条通知
+      const notificationPromises = allUniqueIds
+        .filter((uid: string) => uid !== myUid) // 显式加上类型
+        .map((friendUid: string) => {           // 显式加上类型
+          // 往全局 notifications 集合写数据，触发对方首页监听
+          const notifRef = doc(collection(db, "notifications")); 
+          return setDoc(notifRef, {
+            to: friendUid,
+            fromId: myUid,
+            fromName: currentUserName,
+            type: "new_group",    // 标记这是新账单通知
+            groupName: trimmedName,
+            groupId: uniqueBillId,
+            status: "unread",     // 初始状态为未读，用于显示红点
+            createdAt: Date.now()
+          });
+        });
+
+      await Promise.all(notificationPromises);
       setProcessStep('Success!');
       setTimeout(() => {
         // 1. 清空所有状态

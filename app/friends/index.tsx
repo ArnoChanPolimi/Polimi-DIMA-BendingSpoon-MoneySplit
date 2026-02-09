@@ -40,8 +40,6 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(false);
   const { user: currentUserData } = useAuth(); // 从 Context 获取合并了数据库名字的 user
 
-  // --- 逻辑 1：监听发给“我”的好友申请 (修复 Overload 报错版) ---
-  // --- 逻辑 1：监听发给“我”的好友申请 (严格修复版) ---
   // --- 逻辑 1：监听发给“我”的和“我发出的”申请 ---
   // 1. 在组件内部顶部增加状态
   const [myFriendIds, setMyFriendIds] = useState<string[]>([]);
@@ -58,36 +56,71 @@ export default function FriendsScreen() {
     return () => unsubscribe();
   }, []);
 
+  // useEffect(() => {
+  //   if (!auth.currentUser) return;
+
+  //   const notificationsRef = collection(db, "notifications");
+
+  //   // 修复版：将所有条件放入 and() 内部
+  //   const q = query(
+  //     notificationsRef,
+  //     and(
+  //       where("type", "==", "friend_request"),
+  //       where("status", "==", "pending"),
+  //       or(
+  //         where("to", "==", auth.currentUser.uid),
+  //         where("from", "==", auth.currentUser.uid)
+  //       )
+  //     )
+  //   );
+
+  //   const unsubscribe = onSnapshot(q, (snapshot) => {
+  //     const reqs = snapshot.docs.map(doc => ({ 
+  //       id: doc.id, 
+  //       ...doc.data() 
+  //     }));
+  //     setPendingRequests(reqs);
+  //   }, (error: Error) => {
+  //     console.error("监听申请报错:", error);
+  //   });
+
+  //   return () => unsubscribe();
+  // }, []);
   useEffect(() => {
     if (!auth.currentUser) return;
 
     const notificationsRef = collection(db, "notifications");
 
-    // 修复版：将所有条件放入 and() 内部
+    // 修改版：只要是发给“我”的、且状态是 pending 或 unread 的，全抓回来
     const q = query(
       notificationsRef,
       and(
-        where("type", "==", "friend_request"),
-        where("status", "==", "pending"),
+        // 关键：这里需要包含我发出的和发给我的，以便更新搜索列表的状态
         or(
           where("to", "==", auth.currentUser.uid),
           where("from", "==", auth.currentUser.uid)
         )
+        // or(
+        //   where("status", "==", "pending"),
+        //   where("status", "==", "unread")
+        // )
       )
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const reqs = snapshot.docs.map(doc => ({ 
+      const allReqs = snapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data() 
       }));
-      setPendingRequests(reqs);
+      console.log("Total Notifications caught:", allReqs.length);
+      setPendingRequests(allReqs); // 现在这里面既有好友申请，又有账单邀请了
     }, (error: Error) => {
-      console.error("监听申请报错:", error);
+      console.error("监听通知报错:", error);
     });
 
     return () => unsubscribe();
   }, []);
+
 
   // --- 逻辑 2：纯净版自动搜索（只对准你有的 username 和 email） ---
   useEffect(() => {
@@ -162,42 +195,6 @@ export default function FriendsScreen() {
   };
 
   // // // --- 逻辑 4：处理接受申请 (修复版：存入用户文档下的 friends 子集合) ---
-  // // // --- 逻辑 4：处理接受申请 (更新字段版) --- 现在是双向添加好友
-  // const handleAcceptRequest = async (request: any) => {
-  //   if (!auth.currentUser) return;
-    
-  //   try {
-  //     setLoading(true);
-  //     const myUid = auth.currentUser.uid;
-  //     // const myName = auth.currentUser.displayName || "User";
-  //     const myName = currentUserData ? ((currentUserData as any).username || currentUserData.displayName || "User") : "User";
-  //     console.log("准备写入对方列表的名字:", myName);
-      
-  //     // 关键点：发送申请的人是 request.from
-  //     const targetUid = request.from; 
-  //     const targetName = request.fromName || "Friend";
-
-  //     const myRef = doc(db, "users", myUid, "friends", targetUid);
-  //     const targetRef = doc(db, "users", targetUid, "friends", myUid);
-
-  //     // 执行双向写入
-  //     await Promise.all([
-  //       setDoc(myRef, { uid: targetUid, displayName: targetName, addedAt: serverTimestamp() }),
-  //       setDoc(targetRef, { uid: myUid, displayName: myName, addedAt: serverTimestamp() })
-  //     ]);
-
-  //     // 更新通知
-  //     await updateDoc(doc(db, "notifications", request.id), { status: "accepted" });
-      
-  //     Alert.alert("Success", "You are now friends!");
-  //   } catch (error: any) {
-  //     console.error("双向写入失败:", error.message);
-  //     // 💡 如果这里报错 "Missing or insufficient permissions"，说明是安全规则问题
-  //     Alert.alert("Permission Error", "Could not update friend's list. Check security rules.");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
   const handleAcceptRequest = async (request: any) => {
     // 1. 严格检查：如果 user 还没加载好，直接 return，防止后面 .email 报错
     if (!auth.currentUser || !currentUserData) {
@@ -209,13 +206,18 @@ export default function FriendsScreen() {
       setLoading(true);
       const myUid = auth.currentUser.uid;
 
-      // 2. 名字优先级：数据库 username > 邮箱前缀 > 邮箱前8位 > "User"
-      const myEmail = currentUserData.email || "";
-      const emailPrefix = myEmail.split('@')[0];
-      const emailShort = myEmail.substring(0, 8);
+      // 2. 名字优先级优化：数据库字段 > 邮箱前缀 > 邮箱强制前8位 > "User"
+      // 确保从 currentUserData（你监听主表得到的实时对象）中取值
+      const myEmail = currentUserData.email || auth.currentUser.email || "";
+      const emailPrefix = myEmail ? myEmail.split('@')[0] : "";
+      const emailShort = myEmail ? myEmail.substring(0, 8) : "";
 
-      // 这行逻辑确保了：只要这个号有邮箱，存进去的就绝对不是 "User"
-      const myName = (currentUserData as any).username || emailPrefix || emailShort || "User";
+      // 时刻覆盖更新的核心：确保写入对方数据库的名字是当前最准的
+      const myName = (currentUserData as any).username || 
+                     currentUserData.displayName || 
+                     emailPrefix || 
+                     emailShort || 
+                     "User";
       
       const targetUid = request.from;
       const targetName = request.fromName || "Friend";
@@ -303,24 +305,54 @@ export default function FriendsScreen() {
 
       <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
         {/* 2. 消息通知区 (增加 key 强制重绘) */}
+        {/* 2. 消息通知区 */}
         {pendingRequests.length > 0 ? (
-          <View style={styles.section} key={`pending-list-${pendingRequests.length}`}>
-            <ThemedText style={styles.sectionTitle}>Pending Requests</ThemedText>
-            {pendingRequests.map((req) => (
-              <View key={req.id} style={styles.requestRow}>
-                <ThemedText style={{ flex: 1 }}>{req.fromName} wants to be friends</ThemedText>
-                
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Pressable onPress={() => handleAcceptRequest(req)} style={styles.acceptBtn}>
-                    <ThemedText style={styles.acceptText}>Accept</ThemedText>
-                  </Pressable>
+          <View style={styles.section}>
+            {/* --- A. 好友申请列表 --- */}
+            {pendingRequests.filter(r => 
+              r.type === "friend_request" && 
+              r.to === auth.currentUser?.uid && 
+              (r.status === "pending" || r.status === "unread") // 容错处理
+            ).length > 0 && (
+              <>
+                <ThemedText style={styles.sectionTitle}>Friend Requests</ThemedText>
+                {pendingRequests.filter(r => r.type === "friend_request" && r.to === auth.currentUser?.uid && (r.status === "pending" || r.status === "unread")).map((req) => (
+                  <View key={req.id} style={styles.requestRow}>
+                    <ThemedText style={{ flex: 1 }}>{req.fromName} wants to be friends</ThemedText>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable onPress={() => handleAcceptRequest(req)} style={styles.acceptBtn}>
+                        <ThemedText style={styles.acceptText}>Accept</ThemedText>
+                      </Pressable>
+                      <Pressable onPress={() => handleDeclineRequest(req.id)} style={styles.declineBtn}>
+                        <ThemedText style={styles.declineText}>Decline</ThemedText>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+                <View style={{ height: 16 }} />
+              </>
+            )}
 
-                  <Pressable onPress={() => handleDeclineRequest(req.id)} style={styles.declineBtn}>
-                    <ThemedText style={styles.declineText}>Decline</ThemedText>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+            {/* --- B. 账单邀请列表 (这是我们要加的新东西) --- */}
+            {pendingRequests.filter(r => r.type === "new_group" && r.status === "unread").length > 0 && (
+              <>
+                <ThemedText style={styles.sectionTitle}>Bill Invitations</ThemedText>
+                {pendingRequests.filter(r => r.type === "new_group" && r.status === "unread").map((req) => (
+                  <View key={req.id} style={[styles.requestRow, { borderColor: '#007AFF', borderWidth: 1 }]}>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={{ fontWeight: '600' }}>{req.groupName}</ThemedText>
+                      <ThemedText style={{ fontSize: 12, opacity: 0.6 }}>Invited by {req.fromName}</ThemedText>
+                    </View>
+                    <Pressable 
+                      onPress={() => handleDeclineRequest(req.id)} 
+                      style={[styles.acceptBtn, { backgroundColor: '#007AFF' }]}
+                    >
+                      <ThemedText style={styles.acceptText}>Accept</ThemedText>
+                    </Pressable>
+                  </View>
+                ))}
+              </>
+            )}
           </View>
         ) : (
           <View style={{ height: 1 }} />

@@ -57,12 +57,12 @@ export default function GroupsScreen() {
       const notificationQuery = query(
         collection(db, "notifications"),
         where("to", "==", user.uid),
-        where("status", "==", "pending")
+        where("status", "==", "unread")
       );
 
       const unsubscribeNotifications = onSnapshot(notificationQuery, (snapshot) => {
         console.log("New notifications received, count:", snapshot.docs.length);
-        setUnreadCount(snapshot.docs.length);
+        setUnreadCount(snapshot.size);
       }, (error) => {
         console.error("Notifications sync error:", error);
       });
