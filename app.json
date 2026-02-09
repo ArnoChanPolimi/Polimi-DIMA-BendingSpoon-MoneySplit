@@ -49,7 +49,8 @@
           "cameraPermission": "Allow aa-split-app to access your camera to scan receipts."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
