@@ -1,28 +1,28 @@
 // app\friends\index.tsx
 import {
-  addDoc,
-  and,
-  collection,
-  doc,
-  limit,
-  onSnapshot,
-  or,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where
+    addDoc,
+    and,
+    collection,
+    doc,
+    limit,
+    onSnapshot,
+    or,
+    query,
+    serverTimestamp,
+    setDoc,
+    updateDoc,
+    where
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -38,9 +38,10 @@ export default function FriendsScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]); // 👈 新增：存放好友申请
   const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { user: currentUserData } = useAuth(); // 从 Context 获取合并了数据库名字的 user
 
-  // --- 逻辑 1：监听发给“我”的和“我发出的”申请 ---
+  // --- 逻辑 1：监听发给"我"的和"我发出的"申请 ---
   // 1. 在组件内部顶部增加状态
   const [myFriendIds, setMyFriendIds] = useState<string[]>([]);
 
@@ -270,9 +271,23 @@ export default function FriendsScreen() {
     }
   };
 
+  // 刷新函数
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setSearchQuery('');
+    setSearchResults([]);
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
+
   return (
     <AppScreen>
-      <AppTopBar title="Friends Center" showBack />
+      <AppTopBar 
+        title="Friends Center" 
+        showBack 
+        showRefresh={true}
+        onRefreshPress={handleRefresh}
+        isRefreshing={isRefreshing}
+      />
       
       {/* 1. 搜索框 */}
       {/* 实时搜索输入区 */}

@@ -4,12 +4,25 @@ import { useThemeColor } from "@/hooks/use-theme-color";
 import { ReactNode } from "react";
 import { ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import RefreshControl from "./RefreshControl";
 
 interface AppScreenProps {
   children: ReactNode;
+  /**
+   * Whether a refresh operation is in progress
+   */
+  isRefreshing?: boolean;
+  /**
+   * Callback when user pulls down to refresh
+   */
+  onRefresh?: () => void | Promise<void>;
 }
 
-export default function AppScreen({ children }: AppScreenProps) {
+export default function AppScreen({ 
+  children, 
+  isRefreshing = false,
+  onRefresh 
+}: AppScreenProps) {
   // ✅ 关键：取主题背景色
   const backgroundColor = useThemeColor({}, "background");
 
@@ -24,6 +37,14 @@ export default function AppScreen({ children }: AppScreenProps) {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl 
+                refreshing={isRefreshing} 
+                onRefresh={onRefresh}
+              />
+            ) : undefined
+          }
         >
           {children}
         </ScrollView>

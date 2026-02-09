@@ -30,6 +30,18 @@ const translations = {
 
     currency: "Currency",
     defaultCurrency: "Default currency",
+    currencyDemo: "💱 Currency Conversion Demo",
+    selectCurrency: "Select default currency",
+    exchangeRate: "📊 Live Exchange Rate",
+    refreshRate: "Refresh Rate",
+    quickConversion: "🔄 Quick Conversion Example",
+    expenseList: "📋 Expense List",
+    convertedTo: "Converted to",
+    featureInfo: "✨ Feature Info",
+    allExpensesConverted: "All expenses have been automatically converted to your selected currency",
+    clickToSwitch: "Click the buttons above to switch default currency",
+    ratesUpdateInRealTime: "Rates update in real-time after configuration",
+    resultsAutoSaved: "Conversion results are automatically saved for next session",
 
     notifications: "Notifications",
     expenseChanges: "Expense changes",
@@ -186,6 +198,13 @@ If you have questions, please contact us through the app.`,
     success: "Success",
     sent: "Sent",
     pending: "Pending",
+
+    // ===== Pull to Refresh =====
+    refresh: "Refresh",
+    refreshing: "Refreshing...",
+    pullToRefresh: "Pull to refresh",
+    releaseToRefresh: "Release to refresh",
+    syncingWithCloud: "Syncing with cloud",
   },
 
   /* =========================
@@ -214,6 +233,18 @@ If you have questions, please contact us through the app.`,
 
     currency: "货币",
     defaultCurrency: "默认货币",
+    currencyDemo: "💱 货币转换演示",
+    selectCurrency: "选择默认货币",
+    exchangeRate: "📊 实时汇率",
+    refreshRate: "刷新汇率",
+    quickConversion: "🔄 快速转换示例",
+    expenseList: "📋 支出清单",
+    convertedTo: "已转换到",
+    featureInfo: "✨ 功能说明",
+    allExpensesConverted: "所有支出金额已自动转换到您选择的货币",
+    clickToSwitch: "点击上方按钮切换默认货币",
+    ratesUpdateInRealTime: "配置 API Key 后，汇率实时更新",
+    resultsAutoSaved: "转换结果自动保存，下次启动时恢复",
 
     notifications: "通知",
     expenseChanges: "消费变更",
@@ -367,6 +398,13 @@ MoneySplit 保留随时修改这些条款的权利。
     groups: "群组",
     friends: "好友",
     quickAdd: "新增",
+
+    // ===== Pull to Refresh =====
+    refresh: "刷新",
+    refreshing: "刷新中...",
+    pullToRefresh: "下拉刷新",
+    releaseToRefresh: "松开即可刷新",
+    syncingWithCloud: "正在同步云端数据",
   },
 
   /* =========================
@@ -395,6 +433,18 @@ MoneySplit 保留随时修改这些条款的权利。
 
     currency: "Valuta",
     defaultCurrency: "Valuta predefinita",
+    currencyDemo: "💱 Demo conversione valuta",
+    selectCurrency: "Seleziona valuta predefinita",
+    exchangeRate: "📊 Tasso di cambio in tempo reale",
+    refreshRate: "Aggiorna tasso",
+    quickConversion: "🔄 Esempio di conversione veloce",
+    expenseList: "📋 Elenco spese",
+    convertedTo: "Convertito a",
+    featureInfo: "✨ Info funzione",
+    allExpensesConverted: "Tutte le spese sono state automaticamente convertite nella valuta selezionata",
+    clickToSwitch: "Fare clic sui pulsanti sopra per cambiare la valuta predefinita",
+    ratesUpdateInRealTime: "I tassi si aggiornano in tempo reale dopo la configurazione",
+    resultsAutoSaved: "I risultati della conversione vengono salvati automaticamente per la prossima sessione",
 
     notifications: "Notifiche",
     expenseChanges: "Modifiche spese",
@@ -548,6 +598,13 @@ Se hai domande, contattaci attraverso l'app.`,
     groups: "Gruppi",
     friends: "Amici",
     quickAdd: "Nuovo",
+
+    // ===== Pull to Refresh =====
+    refresh: "Aggiorna",
+    refreshing: "Aggiornamento in corso...",
+    pullToRefresh: "Scorri verso il basso per aggiornare",
+    releaseToRefresh: "Rilascia per aggiornare",
+    syncingWithCloud: "Sincronizzazione con il cloud",
   },
 };
 

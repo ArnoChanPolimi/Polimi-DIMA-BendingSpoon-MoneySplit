@@ -29,7 +29,8 @@ export default function QuickAddScreen() {
   const [loading, setLoading] = useState(false); 
   const [processStep, setProcessStep] = useState<string>(''); 
   const [nameError, setNameError] = useState(false); 
-  // 控制“添加好友”弹窗的显示/隐藏
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // 控制"添加好友"弹窗的显示/隐藏
   const [showAddPeople, setShowAddPeople] = useState(false);
 
   // 你的新“双轨制”状态
@@ -222,13 +223,31 @@ export default function QuickAddScreen() {
   const borderColor = useThemeColor({}, "border");
   const cardColor = useThemeColor({}, "card");
 
+  // 刷新表单
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setGroupName('');
+    setAmount('');
+    setReceipts([]);
+    setNameError(false);
+    setProcessStep('');
+    setSelectedPayers([]);
+    setSelectedParticipants([]);
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
+
   // 选中态颜色（保持你原有设计）
   const selectedBg = "#2563eb";
   const selectedBorder = "#2563eb";
 
   return (
     <AppScreen>
-      <AppTopBar title={t("newExpenseGroup")} />
+      <AppTopBar 
+        title={t("newExpenseGroup")}
+        showRefresh={true}
+        onRefreshPress={handleRefresh}
+        isRefreshing={isRefreshing}
+      />
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="subtitle" style={nameError ? { color: '#ef4444' } : {}}>
           {t("groupNameTitle")} {nameError && t("alreadyExists")}

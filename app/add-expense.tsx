@@ -43,6 +43,7 @@ export default function AddExpenseScreen() {
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [friends, setFriends] = useState<FriendRecord[]>([]);
   // 应该改为（默认只选你自己）：
@@ -202,9 +203,25 @@ export default function AddExpenseScreen() {
     }
   };
 
+  // 刷新表单
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTitle('');
+    setTotalAmount('');
+    setNotes('');
+    setParticipantIds(auth.currentUser?.uid ? [auth.currentUser.uid] : []);
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
+
   return (
     <AppScreen>
-      <AppTopBar title={t("newExpense")} showBack />
+      <AppTopBar 
+        title={t("newExpense")} 
+        showBack 
+        showRefresh={true}
+        onRefreshPress={handleRefresh}
+        isRefreshing={isRefreshing}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
