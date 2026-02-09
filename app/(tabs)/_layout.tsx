@@ -1,9 +1,11 @@
 // app/(tabs)/_layout.tsx
+import { PixelIcon } from "@/components/ui/PixelIcon";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { AppProviders } from "@/services/Providers";
-import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
+import { StyleSheet } from "react-native";
 
 export default function TabsLayout() {
   // 关键：让这个组件在语言切换时重新渲染，title 才会变
@@ -24,9 +26,19 @@ export default function TabsLayout() {
           tabBarActiveTintColor: activeTintColor,
           tabBarInactiveTintColor: inactiveTintColor,
           tabBarStyle: {
-            backgroundColor,
-            borderTopColor: borderColor,
+            position: 'absolute',
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
           },
+          tabBarBackground: () => (
+            <BlurView
+              intensity={80}
+              tint="light"
+              style={StyleSheet.absoluteFill}
+            />
+          ),
         }}
       >
         <Tabs.Screen
@@ -35,7 +47,7 @@ export default function TabsLayout() {
             title: "",
             tabBarLabel: "",
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="people-outline" size={size} color={color} />
+              <PixelIcon name="groups" size={size} color={color} />
             ),
           }}
         />
@@ -45,7 +57,7 @@ export default function TabsLayout() {
             title: "",
             tabBarLabel: "",
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="add-circle" size={size + 6} color={color} />
+              <PixelIcon name="add" size={size + 4} color={color} />
             ),
           }}
         />
@@ -55,7 +67,7 @@ export default function TabsLayout() {
             title: "",
             tabBarLabel: "",
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="settings-outline" size={size} color={color} />
+              <PixelIcon name="settings" size={size} color={color} />
             ),
           }}
         />

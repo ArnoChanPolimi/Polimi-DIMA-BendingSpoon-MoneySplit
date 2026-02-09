@@ -224,225 +224,15 @@ If you have questions, please contact us through the app.`,
     splitModeRatio: "Ratio",
     perPerson: "per person",
     enterRatio: "Ratio",
-  },
 
-  /* =========================
-     Chinese (简体中文)
-  ========================= */
-  zh: {
-    settings: "设置",
-    account: "账号",
-    signedIn: "已登录",
-    editName: "修改名称",          // 补齐这个
-    switchAccount: "切换账号",
-    logout: "退出登录",
-    preferences: "偏好",
-
-    theme: "主题",
-    themeSubtitle: "跟随系统 / 浅色 / 深色",
-    system: "跟随系统",
-    light: "浅色",
-    dark: "深色",
-
-    language: "语言",
-    appLanguage: "应用语言",
-    english: "英语",
-    chinese: "中文",
-    italian: "意大利语",
-
-    currency: "货币",
-    defaultCurrency: "默认货币",
-    currencyDemo: "💱 货币转换演示",
-    selectCurrency: "选择默认货币",
-    exchangeRate: "📊 实时汇率",
-    refreshRate: "刷新汇率",
-    quickConversion: "🔄 快速转换示例",
-    expenseList: "📋 支出清单",
-    convertedTo: "已转换到",
-    featureInfo: "✨ 功能说明",
-    allExpensesConverted: "所有支出金额已自动转换到您选择的货币",
-    clickToSwitch: "点击上方按钮切换默认货币",
-    ratesUpdateInRealTime: "配置 API Key 后，汇率实时更新",
-    resultsAutoSaved: "转换结果自动保存，下次启动时恢复",
-
-    notifications: "通知",
-    expenseChanges: "消费变更",
-    notifyExpense: "新增或编辑消费时通知我",
-
-    about: "关于应用",
-    aboutLine1: "共享记账应用——基于 Bending Spoons 的课程项目。",
-    aboutLine2: "这些设置目前仅用于演示，之后可以保存到后端。",
-
-    notSignedIn: "你还没有登录。",
-    login: "登录",
-    signup: "注册",
-
-    error: "错误",
-
-    myGroups: "我的群组",
-    groupsIntro: "为每一次旅行或朋友分组创建一个群组，然后添加消费。",
-    showFilters: "显示筛选",
-    hideFilters: "隐藏筛选",
-
-    time: "时间",
-    all: "全部",
-    last12Months: "最近一年",
-    olderThan1Year: "一年以前",
-
-    status: "状态",
-    finished: "已结束",
-    notFinished: "进行中",
-
-    expenseType: "消费类型",
-
-    typeTravel: "旅行",
-    typeFoodDrinks: "餐饮",
-    typeShopping: "购物",
-    typeTransport: "交通",
-    typeHousehold: "日常开销",
-    typeOther: "其他",
-
-    members: "人",
-    tapToSeeBalances: "点击查看结算与明细",
-    noGroupsMatch: "没有符合当前筛选条件的群组。",
-    from: "从",
-
-    newGroup: "新建群组",
-    enterGroupName: "请输入群组名称。",
-    groupName: "群组名称",
-    groupNamePlaceholder: "巴黎旅行、合租账单…",
-    membersDemo: "成员（演示）",
-    member1: "成员 1",
-    member2: "成员 2",
-    member1Placeholder: "Alice",
-    member2Placeholder: "Bob",
-    saveDemo: "保存（演示）",
-    membersTodo: "TODO：后续支持动态添加多个成员。",
-
-    newExpense: "新增消费",
-    step1Title: "1 · 为这笔消费起个名字",
-    expenseNamePlaceholder: "例如：米兰晚餐",
-    step2Title: "2 · 谁参与了？",
-    step2Hint: "之后将来自好友列表，目前为演示数据。",
-    you: "你",
-    step3Title: "3 · 总金额",
-    amountPlaceholder: "例如：120",
-    notesOptionalTitle: "可选 · 备注",
-    notesPlaceholder: "你想记录的任何信息",
-
-    demoAlertTitle: "演示",
-    demoAlertName: "名称",
-    demoAlertAmount: "金额",
-    demoAlertPeople: "参与人",
-
-    // ===== Quick Add / Add Expense (Group Creation) =====
-    newExpenseGroup: "创建群组",
-    groupNameTitle: "群组名称",
-    alreadyExists: "已存在",
-    whoPaidTitle: "谁支付？",
-    whoSplitsTitle: "谁参与分摆？",
-    totalBudgetTitle: "总金额",
-    receiptOptionalTitle: "小票（可选）",
-    addMoreReceipts: "添加更多小票",
-    uploadReceipt: "上传小票",
-    confirmGenerateBill: "创建群组",
-    selectFriends: "选择好友",
-    loadingOrNoFriends: "加载中...或您还没有好友",
-    done: "完成",
-    noFriends: "您还没有好友",
-    receipts: "小票",
-    selectCover: "选择封面",
-    tapToSelectCover: "点击选择封面图片",
-    groupDescription: "群组描述（可选）",
-    groupDescriptionPlaceholder: "这个群组用来做什么？",
-    selectMembers: "选择成员",
-
-    // ===== Authentication / Signup =====
-    createAccount: "创建账户",
-    username: "用户名",
-    emailPlaceholder: "your@email.com",
-    password: "密码",
-    confirmPassword: "确认密码",
-    passwordStrength: "密码强度",
-    agreeTerms: "我同意服务条款和隐私政策",
-    creatingAccount: "正在创建账户...",
-    signUpButton: "注册",
-    fillAllFields: "请填写所有字段",
-    passwordsDoNotMatch: "密码不匹配",
-    agreeTermsError: "请同意服务条款和隐私政策",
-    signupFailed: "注册失败",
-    verificationSent: "验证邮件已发送至:",
-    checkInbox: "请检查您的收件箱并点击链接以激活您的账户。",
-    checkingStatus: "正在检查状态...",
-    timeoutVerification: "超时。如需要请重新发送。",
-    alreadyVerified: "我已验证",
-    resendEmail: "重新发送邮件",
-    resendIn: "重新发送",
-    backToEdit: "返回编辑",
-    emailVerified: "邮件已验证！欢迎加入。",
-    newVerificationSent: "新的验证邮件已发送。",
-    sessionExpired: "会话已过期，请重新注册。",
-    verificationPending: "暂未检测到验证。请先点击邮件中的链接。",
-    somethingWrong: "出了点问题，请重试。",
-    termsTitle: "服务条款和条件",
-    termsContent: `1. 用户协议
-使用 MoneySplit 即表示您同意这些条款和条件。
-
-2. 账户责任
-您负责维护账户和密码的机密性。
-
-3. 可接受的使用
-您同意不将 MoneySplit 用于任何非法目的。
-
-4. 用户内容
-您保留提交到 MoneySplit 的内容的所有权。
-
-5. 隐私
-您使用 MoneySplit 受我们的隐私政策约束。
-
-6. 责任限制
-MoneySplit 不对任何间接或后果性损害负责。
-
-7. 终止
-我们可随时以任何理由终止您的账户。
-
-8. 条款变更
-MoneySplit 保留随时修改这些条款的权利。
-
-9. 管辖法律
-这些条款受适用法律管辖。
-
-10. 联系方式
-如有疑问，请通过应用与我们联系。`,
-    closeButton: "关闭",
-    success: "成功",
-    sent: "已发送",
-    pending: "等待中",
-
-    groups: "群组",
-    friends: "好友",
-    quickAdd: "新增",
-
-    // ===== Pull to Refresh =====
-    refresh: "刷新",
-    refreshing: "刷新中...",
-    pullToRefresh: "下拉刷新",
-    releaseToRefresh: "松开即可刷新",
-    syncingWithCloud: "正在同步云端数据",
-
-    // ===== Currency Selection =====
-    recordCurrency: "记账货币",
-    selectRecordCurrency: "选择此账单的记账货币",
-
-    // ===== Split Amounts =====
-    splitAmounts: "分摆金额",
-    enterAmount: "输入金额",
-    me: "我",
-    splitModeEqual: "人均",
-    splitModeCustom: "指定金额",
-    splitModeRatio: "按比例",
-    perPerson: "每人",
-    enterRatio: "比例",
+    // ===== Avatar =====
+    selectAvatar: "Select Avatar",
+    defaultAvatars: "Default",
+    colorAvatars: "Colors",
+    customAvatar: "Custom",
+    uploadFromGallery: "Upload from Gallery",
+    changeAvatar: "Change Avatar",
+    avatarUpdated: "Avatar updated",
   },
 
   /* =========================
@@ -662,6 +452,15 @@ Se hai domande, contattaci attraverso l'app.`,
     splitModeRatio: "Proporzione",
     perPerson: "a persona",
     enterRatio: "Proporzione",
+
+    // ===== Avatar =====
+    selectAvatar: "Seleziona Avatar",
+    defaultAvatars: "Predefiniti",
+    colorAvatars: "Colori",
+    customAvatar: "Personalizzato",
+    uploadFromGallery: "Carica dalla Galleria",
+    changeAvatar: "Cambia Avatar",
+    avatarUpdated: "Avatar aggiornato",
   },
 };
 
@@ -669,10 +468,9 @@ export const i18n = new I18n(translations);
 i18n.enableFallback = true;
 
 // 设置当前语言（没传就用系统语言）
-export function applyLocale(lang?: "en" | "zh" | "it") {
+export function applyLocale(lang?: "en" | "it") {
   const sys = Localization.getLocales()?.[0]?.languageCode;
-  const fallback: "en" | "zh" | "it" =
-    sys === "zh" ? "zh" : sys === "it" ? "it" : "en";
+  const fallback: "en" | "it" = sys === "it" ? "it" : "en";
   i18n.locale = lang ?? fallback;
 }
 

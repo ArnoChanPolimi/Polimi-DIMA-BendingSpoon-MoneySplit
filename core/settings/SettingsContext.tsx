@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { useColorScheme as useRNColorScheme } from "react-native";
 
 export type ThemeMode = "system" | "light" | "dark";
-export type Language = "en" | "zh" | "it";
+export type Language = "en" | "it";
 
 type SettingsCtx = {
   theme: ThemeMode;
@@ -34,8 +34,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(KEY_LANG),
         ]);
         if (t === "system" || t === "light" || t === "dark") setThemeState(t);
-        const lang = (l === "en" || l === "zh" || l === "it") ? l : "en";
-        if (l === "en" || l === "zh" || l === "it") setLanguageState(lang);
+        const lang = (l === "en" || l === "it") ? l : "en";
+        if (l === "en" || l === "it") setLanguageState(lang);
         applyLocale(lang); // 初始化时应用语言到 i18n
       } finally {
         setHydrated(true);

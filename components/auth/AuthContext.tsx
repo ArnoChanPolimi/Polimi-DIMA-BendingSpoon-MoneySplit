@@ -1,44 +1,55 @@
 // components\auth\AuthContext.tsx
 import {
-  createUserWithEmailAndPassword,
-  User as FirebaseUser,
-  onAuthStateChanged,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile
+    createUserWithEmailAndPassword,
+    User as FirebaseUser,
+    onAuthStateChanged,
+    sendEmailVerification,
+    sendPasswordResetEmail,
+    signInWithEmailAndPassword,
+    signOut,
+    updateProfile
 } from 'firebase/auth';
-import { collection, doc, getDocs, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { auth, db } from '../../services/firebase';
+import { auth, db, uploadImageAndGetUrl } from '../../services/firebase';
 
-// 1. 定义类型，加入 updateUsername
+// 用户头像类型
+export interface UserAvatar {
+  type: "default" | "color" | "custom";
+  value: string; // avatar_id / color hex / image URL
+}
+
+// 1. 定义类型，加入 updateUsername 和头像功能
 type Ctx = {
   user: FirebaseUser | null;
+  userAvatar: UserAvatar | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   checkEmailVerified: () => Promise<boolean>;
-  updateUsername: (newUsername: string) => Promise<void>; // 新增
+  updateUsername: (newUsername: string) => Promise<void>;
+  updateAvatar: (avatar: UserAvatar) => Promise<void>;
 };
 
 // 2. 创建 Context
 const AuthCtx = createContext<Ctx>({
   user: null,
+  userAvatar: null,
   loading: true,
   login: async () => {},
   signup: async () => {},
   logout: async () => {},
   resetPassword: async () => {},
   checkEmailVerified: async () => false,
-  updateUsername: async () => {}, // 新增
+  updateUsername: async () => {},
+  updateAvatar: async () => {},
 });
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userAvatar, setUserAvatar] = useState<UserAvatar | null>(null);
   const [loading, setLoading] = useState(true);
 
   // 监听用户状态
@@ -59,13 +70,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
               { ...firestoreData } // 关键：实时同步 friends 数组
             );
             setUser(mergedUser);
+            
+            // 加载用户头像
+            if (firestoreData.avatar && firestoreData.avatar.type) {
+              setUserAvatar(firestoreData.avatar);
+            } else {
+              setUserAvatar({ type: "color", value: "#3b82f6" });
+            }
           } else {
             setUser(firebaseUser);
+            setUserAvatar({ type: "color", value: "#3b82f6" });
           }
           setLoading(false);
         });
       } else {
         setUser(null);
+        setUserAvatar(null);
         if (unsubscribeFirestore) unsubscribeFirestore();
         setLoading(false);
       }
@@ -96,7 +116,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       username: username, // 使用注册时填写的用户名
       email: email.toLowerCase(),
       createdAt: new Date().toISOString(),
-      avatar: "",
+      avatar: { type: "color", value: "#3b82f6" }, // 默认颜色头像
       friends: [], // 必须加上这一行！初始化为空数组
     });
 
@@ -196,17 +216,46 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     console.log("Updated username to:", newUsername);
   };
 
+  // 更新头像
+  const updateAvatar = async (avatar: UserAvatar) => {
+    if (!auth.currentUser) throw new Error("No user logged in");
+    
+    try {
+      let finalAvatar = avatar;
+      
+      // 如果是自定义图片，先上传到 Firebase Storage
+      if (avatar.type === "custom" && avatar.value.startsWith("file://")) {
+        const imageUrl = await uploadImageAndGetUrl(avatar.value, `avatars/${auth.currentUser.uid}`);
+        finalAvatar = { type: "custom", value: imageUrl };
+        await updateProfile(auth.currentUser, { photoURL: imageUrl });
+      }
+      
+      // 保存到 Firestore
+      await updateDoc(doc(db, "users", auth.currentUser.uid), {
+        avatar: finalAvatar,
+      });
+      
+      setUserAvatar(finalAvatar);
+      console.log("Updated avatar:", finalAvatar);
+    } catch (e) {
+      console.error("Failed to update avatar:", e);
+      throw e;
+    }
+  };
+
   // 3. 将所有函数放入 value 并导出
   const value = useMemo(() => ({
     user,
+    userAvatar,
     loading,
     login,
     signup,
     logout,
     resetPassword,
     checkEmailVerified,
-    updateUsername // 确保它在这里！
-  }), [user, loading]);
+    updateUsername,
+    updateAvatar,
+  }), [user, userAvatar, loading]);
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

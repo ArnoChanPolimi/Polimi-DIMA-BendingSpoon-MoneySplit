@@ -1,5 +1,6 @@
 // components/expense/ParticipantSection.tsx
 import { ThemedText } from "@/components/themed-text";
+import { PixelIcon } from "@/components/ui/PixelIcon";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -51,10 +52,10 @@ export function ParticipantSection({ selectedFriends, participantIds, onToggle, 
           );
         })}
 
-        {/* 2. 添加按钮：结构上绝对独立，样式上绝对对齐 */}
+        {/* 2. 添加按钮：像素风格 */}
         <Pressable style={styles.addTile} onPress={onAddPress}>
           <View style={styles.addAvatar}>
-            <Ionicons name="add" size={24} color="#6b7280" />
+            <PixelIcon name="add" size={16} color="#60a5fa" />
           </View>
           <ThemedText style={styles.addText}>Add</ThemedText>
         </Pressable>
@@ -101,26 +102,27 @@ const styles = StyleSheet.create({
   tileText: { fontSize: 11, fontWeight: '600', color: '#374151' },
   badge: { position: 'absolute', top: 4, right: 4 },
   
-  // 添加按钮样式：必须与 tile 严格一致
+  // 添加按钮样式：浅灰色细边框白色背景
   addTile: {
-    flexDirection: 'row', // 也要变横向
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,    // 也要变胶囊
-    borderWidth: 1.5,
-    borderColor: '#d1d5db',
-    borderStyle: 'dashed',
-    backgroundColor: '#f9fafb',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    marginTop: -23,
   },
   addAvatar: {
     width: 20,
     height: 20,
-    borderRadius: 10,
-    backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
   },
-  addText: { fontSize: 11, color: '#6b7280', fontWeight: 'bold', lineHeight: 20 },
+  addText: { 
+    fontSize: 14, 
+    color: '#9ca3af', 
+  },
 });

@@ -70,13 +70,42 @@ export default function PrimaryButton({
 }
 
 const styles = StyleSheet.create({
-  button: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  primaryButton: { backgroundColor: '#3b82f6' },
-  secondaryButton: { backgroundColor: '#e5e7eb', borderWidth: 1, borderColor: '#d1d5db' },
-  disabledButton: { backgroundColor: '#9ca3af' }, // 按钮变灰
-  primaryLabel: { color: 'white' },
-  secondaryLabel: { color: '#374151' },
-  disabledLabel: { color: '#f3f4f6' }, // 补齐：按钮变灰时文字也变淡，增加对比度
+  button: { 
+    paddingVertical: 12, 
+    paddingHorizontal: 16, 
+    borderRadius: 0, 
+    borderWidth: 3,
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  primaryButton: { 
+    backgroundColor: '#2563eb',
+    borderColor: '#1d4ed8',
+  },
+  secondaryButton: { 
+    backgroundColor: 'rgba(219, 234, 254, 0.7)', 
+    borderWidth: 3, 
+    borderColor: '#60a5fa' 
+  },
+  disabledButton: { 
+    backgroundColor: '#9ca3af',
+    borderColor: '#6b7280',
+  },
+  primaryLabel: { 
+    color: 'white',
+    fontFamily: 'PressStart2P_400Regular',
+    fontSize: 10,
+  },
+  secondaryLabel: { 
+    color: '#1d4ed8',
+    fontFamily: 'PressStart2P_400Regular',
+    fontSize: 10,
+  },
+  disabledLabel: { 
+    color: '#f3f4f6',
+    fontFamily: 'PressStart2P_400Regular',
+    fontSize: 10,
+  },
   stepText: { marginTop: 8, color: '#666', fontSize: 14 },
   errorText: { color: '#ef4444', fontWeight: 'bold' }
 });

@@ -25,13 +25,24 @@ import {
     View,
 } from 'react-native';
 
+import { useAuth } from '@/components/auth/AuthContext';
 import { ThemedText } from '@/components/themed-text';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import { auth, db } from '@/services/firebase';
-// 确保导入了图标库
-import { useAuth } from '@/components/auth/AuthContext';
 import { Ionicons } from "@expo/vector-icons";
+
+// 默认头像映射
+const DEFAULT_AVATARS: Record<string, any> = {
+  avatar_1: require("@/assets/images/avatars/avatar_1.png"),
+  avatar_2: require("@/assets/images/avatars/avatar_2.png"),
+  avatar_3: require("@/assets/images/avatars/avatar_3.png"),
+  avatar_4: require("@/assets/images/avatars/avatar_4.png"),
+  avatar_5: require("@/assets/images/avatars/avatar_5.png"),
+  avatar_6: require("@/assets/images/avatars/avatar_6.png"),
+  avatar_7: require("@/assets/images/avatars/avatar_7.png"),
+  avatar_8: require("@/assets/images/avatars/avatar_8.png"),
+};
 
 export default function FriendsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -283,14 +294,14 @@ export default function FriendsScreen() {
     <AppScreen>
       <AppTopBar 
         title="Friends Center" 
-        showBack 
+        showBack
+        backSize={25}
         showRefresh={true}
         onRefreshPress={handleRefresh}
         isRefreshing={isRefreshing}
       />
       
-      {/* 1. 搜索框 */}
-      {/* 实时搜索输入区 */}
+      {/* 1. 搜索框 - 像素风 */}
       <View style={styles.searchBox}>
         <View style={styles.inputWrapper}>
           <TextInput
@@ -300,7 +311,6 @@ export default function FriendsScreen() {
             onChangeText={setSearchQuery}
             autoCapitalize="none"
             placeholderTextColor="#9ca3af"
-            // 点击键盘上的搜索键也能触发逻辑
             onSubmitEditing={() => console.log('Searching for:', searchQuery)} 
           />
           
@@ -310,9 +320,9 @@ export default function FriendsScreen() {
             onPress={() => console.log('Manual Search Triggered')}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#007AFF" />
+              <ActivityIndicator size="small" color="#60a5fa" />
             ) : (
-              <Ionicons name="search" size={20} color="#007AFF" />
+              <Ionicons name="search" size={20} color="#60a5fa" />
             )}
           </Pressable>
         </View>
@@ -373,57 +383,87 @@ export default function FriendsScreen() {
           <View style={{ height: 1 }} />
         )}
 
-        {/* 3. 搜索结果区 */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Search Results</ThemedText>
-          {searchResults.map((item) => {
+        {/* 3. 搜索结果区 - 只在搜索后显示 */}
+        {searchQuery.trim().length > 0 && (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Search Results</ThemedText>
+            {searchResults.map((item) => {
 
-            // 2. 判断是否在申请中 (检查 pendingRequests 监听到的通知里是否有与该用户的往来记录)
-            const isPending = pendingRequests.some(req => 
-              req.status === "pending" && ( // 增加状态显式校验
-                (req.from === auth.currentUser?.uid && req.to === item.id) || 
-                (req.from === item.id && req.to === auth.currentUser?.uid)
-              )
-            );
+              // 2. 判断是否在申请中 (检查 pendingRequests 监听到的通知里是否有与该用户的往来记录)
+              const isPending = pendingRequests.some(req => 
+                req.status === "pending" && ( // 增加状态显式校验
+                  (req.from === auth.currentUser?.uid && req.to === item.id) || 
+                  (req.from === item.id && req.to === auth.currentUser?.uid)
+                )
+              );
 
-            // 判断是否已经是好友
-            // const isAlreadyFriend = (item.friends || []).includes(auth.currentUser?.uid);
-            // const isAlreadyFriend = (auth.currentUser as any)?.friends?.includes(item.id);
-            const isAlreadyFriend = myFriendIds.includes(item.id);
+              // 判断是否已经是好友
+              // const isAlreadyFriend = (item.friends || []).includes(auth.currentUser?.uid);
+              // const isAlreadyFriend = (auth.currentUser as any)?.friends?.includes(item.id);
+              const isAlreadyFriend = myFriendIds.includes(item.id);
 
-            return (
-              <View key={item.id} style={styles.row}>
-                <Image 
-                  source={{ uri: item.avatar || `https://ui-avatars.com/api/?name=${item.username}` }} 
-                  style={styles.avatar} 
-                />
-                <View style={styles.info}>
-                  <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
-                  <ThemedText style={styles.details}>{item.email}</ThemedText>
+              // 处理头像：avatar 可能是对象 { type, value } 或字符串
+              const getAvatarSource = () => {
+                const avatar = item.avatar;
+                
+                // 如果是对象格式 { type: "default", value: "avatar_3" } - 使用预设头像
+                if (avatar && typeof avatar === 'object' && avatar.type === 'default' && avatar.value) {
+                  const avatarKey = avatar.value as string;
+                  if (DEFAULT_AVATARS[avatarKey]) {
+                    return DEFAULT_AVATARS[avatarKey];
+                  }
+                }
+                // 如果是对象格式 { type: "custom", value: "url" }
+                if (avatar && typeof avatar === 'object' && avatar.type === 'custom' && avatar.value) {
+                  return { uri: avatar.value };
+                }
+                // 如果是对象格式 { type: "color", value: "#xxx" } - 使用颜色生成头像
+                if (avatar && typeof avatar === 'object' && avatar.type === 'color' && avatar.value) {
+                  const color = avatar.value.replace('#', '');
+                  return { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(item.username || 'U')}&background=${color}&color=fff` };
+                }
+                // 如果是字符串URL
+                if (typeof avatar === 'string' && avatar) {
+                  return { uri: avatar };
+                }
+                // 默认头像
+                return { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(item.username || 'User')}&background=60a5fa&color=fff` };
+              };
+
+              return (
+                <View key={item.id} style={styles.row}>
+                  <Image 
+                    source={getAvatarSource()} 
+                    style={styles.avatar} 
+                  />
+                  <View style={styles.info}>
+                    <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
+                    <ThemedText style={styles.details}>{item.email}</ThemedText>
+                  </View>
+
+                  {/* 根据逻辑显示不同状态按钮 - 像素风 */}
+                  {isAlreadyFriend ? (
+                    <View style={[styles.actionArea, { backgroundColor: '#f3f4f6', borderColor: '#9ca3af' }]}>
+                      <ThemedText style={{ color: '#9ca3af', fontSize: 12, fontWeight: 'bold' }}>Added</ThemedText>
+                    </View>
+                  ) : isPending ? (
+                    <View style={[styles.actionArea, { backgroundColor: '#fff7ed', borderColor: '#f97316' }]}>
+                      <ThemedText style={{ color: '#f97316', fontSize: 12, fontWeight: 'bold' }}>Pending</ThemedText>
+                    </View>
+                  ) : (
+                    <Pressable onPress={() => handleSendRequest(item)} style={styles.actionArea}>
+                      <ThemedText style={styles.addText}>Add</ThemedText>
+                    </Pressable>
+                  )}
                 </View>
-
-                {/* 根据逻辑显示不同状态按钮 */}
-                {isAlreadyFriend ? (
-                  <View style={[styles.actionArea, { backgroundColor: '#f3f4f6' }]}>
-                    <ThemedText style={{ color: '#9ca3af', fontSize: 12 }}>Added</ThemedText>
-                  </View>
-                ) : isPending ? (
-                  <View style={[styles.actionArea, { backgroundColor: '#fff7ed' }]}>
-                    <ThemedText style={{ color: '#f97316', fontSize: 12 }}>Pending</ThemedText>
-                  </View>
-                ) : (
-                  <Pressable onPress={() => handleSendRequest(item)} style={styles.actionArea}>
-                    <ThemedText style={styles.addText}>Add</ThemedText>
-                  </Pressable>
-                )}
-              </View>
-            );
-          })}
-          {/* 在 ScrollView 内部的搜索结果区下方 */}
-          {searchQuery.length > 0 && searchResults.length === 0 && !loading && (
-            <ThemedText style={styles.empty}>No users found with "{searchQuery}"</ThemedText>
-          )}
-        </View>
+              );
+            })}
+            {/* 在 ScrollView 内部的搜索结果区下方 */}
+            {searchResults.length === 0 && !loading && (
+              <ThemedText style={styles.empty}>No users found with "{searchQuery}"</ThemedText>
+            )}
+          </View>
+        )}
       </ScrollView>
     </AppScreen>
   );
@@ -433,20 +473,22 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
   searchBox: {
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderRadius: 0,
+    borderWidth: 3,
+    borderColor: '#60a5fa',
     position: 'relative',
   },
   input: {
     flex: 1,
     height: 48,
     paddingHorizontal: 16,
-    paddingRight: 48, // 给右侧按钮留出空间，防止文字重叠
+    paddingRight: 48,
     fontSize: 15,
     color: '#1f2937',
   },
@@ -494,10 +536,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: '#eff6ff',
-    borderRadius: 8,
+    borderRadius: 0,
+    borderWidth: 2,
+    borderColor: '#60a5fa',
   },
   addText: {
-    color: '#007AFF',
+    color: '#60a5fa',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -526,7 +570,6 @@ const styles = StyleSheet.create({
   },
   acceptBtn: { backgroundColor: '#007AFF', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8 },
   acceptText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  // 在 styles 中添加这些
   declineBtn: { 
     backgroundColor: '#f3f4f6', 
     paddingHorizontal: 12, 
@@ -537,6 +580,5 @@ const styles = StyleSheet.create({
     color: '#6b7280', 
     fontSize: 12, 
     fontWeight: 'bold' 
-  },
-  // ... 其余样式
+  }
 });

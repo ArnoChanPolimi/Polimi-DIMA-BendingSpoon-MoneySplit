@@ -1,13 +1,16 @@
 // app/auth/login.tsx
 import { useAuth } from "@/components/auth/AuthContext";
+import { PixelIcon } from "@/components/ui/PixelIcon";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import React, { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Alert, Animated, Dimensions, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { auth, db } from "../../services/firebase";
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function LoginScreen() {
   const { login, logout, checkEmailVerified } = useAuth();
@@ -23,6 +26,21 @@ export default function LoginScreen() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+
+  // 动画：图片从左到右循环移动
+  const translateX = useRef(new Animated.Value(-60)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      translateX.setValue(-60);
+      Animated.timing(translateX, {
+        toValue: SCREEN_WIDTH,
+        duration: 4000,
+        useNativeDriver: true,
+      }).start(() => animate());
+    };
+    animate();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -90,10 +108,22 @@ export default function LoginScreen() {
   return (
     <View style={[styles.screenContainer, { backgroundColor: isDarkMode ? "#000" : "#fff" }]}>
       <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={15}>
-        <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#000"} />
+        <PixelIcon name="back" size={24} color={isDarkMode ? "#fff" : "#000"} />
       </Pressable>
       <ScrollView contentContainerStyle={styles.container}>
       <Text style={[styles.title, { color: isDarkMode ? "#fff" : "#333" }]}>Welcome Back</Text>
+      
+      {/* 动画图片 - 从左到右移动 */}
+      <View style={styles.animationContainer}>
+        <Animated.Image
+          source={require("@/assets/images/login-animation.png")}
+          style={[
+            styles.animationImage,
+            { transform: [{ translateX }] }
+          ]}
+          resizeMode="contain"
+        />
+      </View>
       
       <View style={styles.form}>
         <TextInput
@@ -227,8 +257,8 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, justifyContent: "center", paddingTop: 60 },
   backButton: {
     position: "absolute",
-    top: 24,
-    left: 24,
+    top: 56,
+    left: 16,
     zIndex: 10,
     paddingVertical: 12,
     paddingHorizontal: 12,
@@ -237,14 +267,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 32, textAlign: "center" },
+  title: { fontSize: 16, fontFamily: "PressStart2P_400Regular", marginBottom: 32, textAlign: "center" },
   form: { width: "100%", marginTop: 40 },
   input: {
-    borderWidth: 1,
+    borderWidth: 3,
+    borderColor: "#60a5fa",
     padding: 14,
     marginBottom: 16,
-    borderRadius: 10,
-    backgroundColor: "#f9f9f9",
+    borderRadius: 0,
+    backgroundColor: "rgba(219, 234, 254, 0.7)",
   },
   passwordInputContainer: {
     flexDirection: "row",
@@ -257,16 +288,18 @@ const styles = StyleSheet.create({
   buttonSpacer: { height: 30 },
   buttonWrapper: { width: "100%", marginBottom: 12, borderRadius: 8, overflow: "hidden" },
   blueButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#2563eb",
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 0,
+    borderWidth: 3,
+    borderColor: "#1d4ed8",
     alignItems: "center",
     marginBottom: 12,
   },
   blueButtonText: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 10,
+    fontFamily: "PressStart2P_400Regular",
   },
   grayButton: {
     paddingVertical: 8,
@@ -331,8 +364,8 @@ const styles = StyleSheet.create({
     maxWidth: 400,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 12,
+    fontFamily: "PressStart2P_400Regular",
     marginBottom: 16,
     textAlign: "center",
   },
@@ -344,5 +377,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 16,
+  },
+  animationContainer: {
+    height: 45,
+    width: '100%',
+    overflow: 'hidden',
+    marginBottom: 0,
+  },
+  animationImage: {
+    width: 45,
+    height: 45,
   },
 });
