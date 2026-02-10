@@ -9,13 +9,13 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } 
 
 // 1. Firebase 核心引用
 import { auth, db } from '@/services/firebase';
-import { getCurrentMonthSpend } from '@/services/statsManager';
+import { subscribeToUserStats } from '@/services/statsManager';
 // 导入统一的假数据源
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
 import { collection, onSnapshot, or, orderBy, query, where } from 'firebase/firestore';
 
+import { GroupCard } from '@/components/group/GroupCardWithListener';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,10 +40,13 @@ export default function GroupsScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   // 新增：专门存本月总支出的状态
   const [thisMonthAmount, setThisMonthAmount] = useState(0);
+  // 用于存储本月限额（用于 subscribeToUserStats）
+  const [monthlyLimit, setMonthlyLimit] = useState(2000);
 
   // 持有 unsubscribe 函数的引用，以便手动刷新时使用
   const unsubscribeGroupsRef = useRef<(() => void) | null>(null);
   const unsubscribeNotificationsRef = useRef<(() => void) | null>(null);
+  const unsubscribeStatsRef = useRef<(() => void) | null>(null);
 
   // 设置 Firebase 监听器的通用函数
   const setupListeners = (user: any) => {
@@ -53,6 +56,9 @@ export default function GroupsScreen() {
     }
     if (unsubscribeNotificationsRef.current) {
       unsubscribeNotificationsRef.current();
+    }
+    if (unsubscribeStatsRef.current) {
+      unsubscribeStatsRef.current();
     }
 
     // --- [分支 A：群组数据监听器] ---
@@ -68,26 +74,6 @@ export default function GroupsScreen() {
     const unsubscribeGroups = onSnapshot(groupQuery, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setFirebaseGroups(docs);
-      // ✨ 【新增核心逻辑】：实时计算本月总支出
-      const now = new Date();
-      const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      let totalForThisMonth = 0;
-
-      docs.forEach((group: any) => {
-        // 1. 检查日期是否是本月 (处理包含斜杠或横杠的情况)
-        const groupDate = group.startDate?.replace(/\//g, '-') || "";
-        if (groupDate.substring(0, 7) === currentMonthStr) {
-          
-          // 2. 找到当前用户的报销记录
-          const myRecord = group.involvedFriends?.find((f: any) => f.uid === user.uid);
-          if (myRecord && myRecord.claimedAmount) {
-            totalForThisMonth += parseFloat(myRecord.claimedAmount);
-          }
-        }
-      });
-
-      // 3. 更新状态，封面上的 0 瞬间变真钱
-      setThisMonthAmount(totalForThisMonth);
       setLoading(false);
       setIsRefreshing(false);
     }, (error) => {
@@ -113,6 +99,19 @@ export default function GroupsScreen() {
     });
 
     unsubscribeNotificationsRef.current = unsubscribeNotifications;
+
+    // --- [分支 C：本月支出统计监听器] ---
+    const unsubscribeStats = subscribeToUserStats(
+      user.uid,
+      monthlyLimit,
+      (data) => {
+        if (data) {
+          setThisMonthAmount(data.thisMonthTotal);
+        }
+      }
+    );
+
+    unsubscribeStatsRef.current = unsubscribeStats;
   };
 
   useEffect(() => {
@@ -123,6 +122,7 @@ export default function GroupsScreen() {
       if (!user) {
         setFirebaseGroups([]);
         setUnreadCount(0);
+        setThisMonthAmount(0);
         setLoading(false);
         // 清理监听器
         if (unsubscribeGroupsRef.current) {
@@ -131,15 +131,13 @@ export default function GroupsScreen() {
         if (unsubscribeNotificationsRef.current) {
           unsubscribeNotificationsRef.current();
         }
+        if (unsubscribeStatsRef.current) {
+          unsubscribeStatsRef.current();
+        }
         return;
       }
 
       setupListeners(user);
-
-      // 获取本月支出金额
-      getCurrentMonthSpend(user.uid).then(amount => {
-        setThisMonthAmount(amount);
-      });
     });
 
     return () => {
@@ -150,19 +148,18 @@ export default function GroupsScreen() {
       if (unsubscribeNotificationsRef.current) {
         unsubscribeNotificationsRef.current();
       }
+      if (unsubscribeStatsRef.current) {
+        unsubscribeStatsRef.current();
+      }
     };
-  }, []);
+  }, [monthlyLimit]);
 
   // 处理下拉刷新
   const handleRefresh = async () => {
     setIsRefreshing(true);
     const user = auth.currentUser;
-      if (user) {
+    if (user) {
       setupListeners(user);
-      // 刷新时也更新本月支出
-      getCurrentMonthSpend(user.uid).then(amount => {
-        setThisMonthAmount(amount);
-      });
     }
     // 保证至少显示 500ms 的刷新动画
     setTimeout(() => {
@@ -206,9 +203,6 @@ export default function GroupsScreen() {
       />
           
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <ThemedText style={styles.subtitle}>
-          {t("yourSharedBillGroups")}
-        </ThemedText>
         {/* 个人消费统计仪表盘入口 - 适配主题 */}
         <Pressable 
           style={[
@@ -243,6 +237,10 @@ export default function GroupsScreen() {
           </View>
         </Pressable>
 
+        <ThemedText style={styles.subtitle}>
+          {t("yourSharedBillGroups")}
+        </ThemedText>
+
         {loading && (
           <View style={styles.loader}>
             <ActivityIndicator size="small" color="#2563eb" />
@@ -257,47 +255,18 @@ export default function GroupsScreen() {
           const displayDate = group?.startDate || (group?.updatedAt ? new Date(group.updatedAt).toLocaleDateString() : 'Unknown');
 
           return (
-            <Pressable 
-              key={group.id} 
+            <GroupCard 
+              key={group.id}
+              group={group}
+              status={status}
+              safeExpenses={safeExpenses}
+              displayDate={displayDate}
               onPress={() => router.push(`/group/${group.id}`)}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }
-              ]}
-            >
-                  <ThemedView style={styles.cardContent}>
-                <View style={styles.cardTop}>
-                  {/* 像素风状态标签 */}
-                  <View style={[
-                    styles.statusPill, 
-                    { 
-                      backgroundColor: status === 'ongoing' ? '#fecaca' : '#e5e7eb',
-                      borderColor: status === 'ongoing' ? '#ef4444' : '#9ca3af',
-                    }
-                  ]}>
-                    <ThemedText style={[
-                      styles.statusText, 
-                      { color: status === 'ongoing' ? '#dc2626' : '#4b5563' }
-                    ]}>
-                      {(status === 'ongoing' ? t('notFinished') : t('finished')).toUpperCase()} 
-                    </ThemedText>
-                  </View>
-                  <ThemedText style={styles.billId}>{group.id}</ThemedText>
-                </View>
-
-                <ThemedText type="defaultSemiBold" style={styles.groupName}>
-                  {group.name || 'Unnamed Group'}
-                </ThemedText>
-
-                <View style={styles.cardBottom}>
-                  <ThemedText style={styles.dateText}>Started {displayDate}</ThemedText>
-                  <ThemedText style={styles.amountText}>
-                    {/* 修正：安全调用 toFixed */}
-                    {Number(safeExpenses).toFixed(2)} €
-                  </ThemedText>
-                </View>
-              </ThemedView>
-            </Pressable>
+              onDelete={(groupId) => {
+                // 群组删除后，Firestore 监听器会自动更新 allGroups 列表
+                // 所以这里不需要手动处理，只是提供一个回调点
+              }}
+            />
           );
         })}
 

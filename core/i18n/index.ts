@@ -25,7 +25,6 @@ const translations = {
     language: "Language",
     appLanguage: "App language",
     english: "English",
-    chinese: "Chinese",
     italian: "Italian",
 
     currency: "Currency",
@@ -73,6 +72,7 @@ const translations = {
     myGroups: "My Groups",
     totalSpending: "Total Spending", // 新增
     created: "Created",             // 新增
+    date: "Date",                   // 新增
     groupsIntro: "Create a group for each trip or set of friends, then add expenses.",
     showFilters: "Show filters",
     hideFilters: "Hide filters",
@@ -276,7 +276,7 @@ If you have questions, please contact us through the app.`,
     language: "Lingua",
     appLanguage: "Lingua dell’app",
     english: "Inglese",
-    chinese: "Cinese",
+
     italian: "Italiano",
 
     currency: "Valuta",
@@ -319,6 +319,7 @@ If you have questions, please contact us through the app.`,
     myGroups: "I miei gruppi",
     totalSpending: "Spesa Totale", // 新增
     created: "Creato il",          // 新增
+    date: "Data",                  // 新增
     groupsIntro: "Crea un gruppo per ogni viaggio...",
     showFilters: "Mostra filtri",
     hideFilters: "Nascondi filtri",

@@ -87,7 +87,6 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
     Image,
     Modal,
     Pressable,
@@ -106,38 +105,48 @@ import { t } from '../core/i18n';
 import { auth } from '../services/firebase';
 import {
     getMonthlyLimit,
-    getUserGlobalStatsUrl,
-    saveMonthlyLimit
+    saveMonthlyLimit,
+    subscribeToUserStats
 } from '../services/statsManager';
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function UserReportScreen() {
-    const [report, setReport] = useState<{ url: string; width: number } | null>(null);
+    const [report, setReport] = useState<{ url: string; width: number; count?: number; thisMonthTotal?: number } | null>(null);
     const [loading, setLoading] = useState(true);
-    const [monthlyLimit, setMonthlyLimit] = useState(2000); 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [monthlyLimit, setMonthlyLimit] = useState(0); 
 
     // ✨ 控制自定义弹窗的状态
     const [isModalVisible, setModalVisible] = useState(false);
     const [tempLimit, setTempLimit] = useState('');
 
     useEffect(() => {
+        if (!auth.currentUser) {
+            // 未登录时，限额显示为 0
+            setMonthlyLimit(0);
+            return;
+        }
+        
+        // 已登录时，从本地存储获取限额
         getMonthlyLimit().then(val => setMonthlyLimit(val));
     }, []);
 
     useEffect(() => {
-        async function fetchMyStats() {
-            setLoading(true);
-            try {
-                if (auth.currentUser) {
-                    const res = await getUserGlobalStatsUrl(auth.currentUser.uid, monthlyLimit);
-                    if (res) setReport(res as { url: string; width: number });
-                }
-            } finally {
+        if (!auth.currentUser) return;
+        
+        setLoading(true);
+        // 使用实时监听替代 getUserGlobalStatsUrl
+        const unsubscribe = subscribeToUserStats(
+            auth.currentUser.uid,
+            monthlyLimit,
+            (data) => {
+                setReport(data);
                 setLoading(false);
             }
-        }
-        fetchMyStats();
+        );
+
+        return () => {
+            unsubscribe();
+        };
     }, [monthlyLimit]);
 
     // ✨ 统一修改限额的入口
@@ -148,36 +157,58 @@ export default function UserReportScreen() {
 
     // ✨ 保存逻辑
     const confirmLimit = () => {
-        const num = parseFloat(tempLimit);
-        if (!isNaN(num) && num > 0) {
-            setMonthlyLimit(num);
-            saveMonthlyLimit(tempLimit);
-            setModalVisible(false);
+        let num = parseFloat(tempLimit);
+        
+        // 如果输入为空，使用 0
+        if (tempLimit === '' || isNaN(num)) {
+            num = 0;
         }
+        
+        // 保存数值
+        setMonthlyLimit(num);
+        saveMonthlyLimit(num.toString());
+        setModalVisible(false);
+    };
+
+    // 🔄 刷新数据
+    const handleRefresh = () => {
+        setIsRefreshing(true);
+        // 重新订阅数据，会自动触发更新
+        setLoading(true);
+        setTimeout(() => {
+            setIsRefreshing(false);
+        }, 500);
     };
 
     return (
         <AppScreen>
-            <AppTopBar title="My Spending Report" showBack
-            onBackPress={() => {
-                if (router.canGoBack()) {
-                router.back();
-                } else {
-                router.replace('/'); // 如果没法返回（比如刷新了网页），就回首页
-                }
-            }} 
+            <AppTopBar 
+                title="My Spending Report" 
+                showBack
+                showRefresh={true}
+                onRefreshPress={handleRefresh}
+                isRefreshing={isRefreshing}
+                onBackPress={() => {
+                    if (router.canGoBack()) {
+                        router.back();
+                    } else {
+                        router.replace('/');
+                    }
+                }} 
             />
             
-            <View style={{ zIndex: 10, backgroundColor: '#f8f9fa' }}>
+            <View style={{ zIndex: 10, paddingHorizontal: 16, paddingTop: 12 }}>
                 <TouchableOpacity 
                     activeOpacity={0.6}
                     onPress={handleEditLimit} 
                     style={styles.limitHeader}
                 >
                     <ThemedText style={styles.limitLabel}>{t('monthlyLimit')}</ThemedText>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <ThemedText style={styles.limitValue}>${monthlyLimit}</ThemedText>
-                        <ThemedText style={{ fontSize: 18, color: '#007AFF', marginLeft: 8 }}>✎</ThemedText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <ThemedText style={styles.limitValue}>€{Math.round(monthlyLimit)}</ThemedText>
+                        <View style={styles.pixelEditIcon}>
+                            <ThemedText style={{ fontSize: 10, fontWeight: 'bold', color: '#007AFF' }}>✎</ThemedText>
+                        </View>
                     </View>
                 </TouchableOpacity>
             </View>
@@ -187,7 +218,11 @@ export default function UserReportScreen() {
                     <ThemedText type="subtitle">Personal Monthly Trends</ThemedText>
                 </View>
 
-                {loading ? (
+                {!auth.currentUser ? (
+                    <View style={styles.placeholderWrapper}>
+                        <ThemedText style={{ fontSize: 16, color: '#999', textAlign: 'center' }}>Please log in</ThemedText>
+                    </View>
+                ) : loading ? (
                     <ActivityIndicator size="large" style={{ marginTop: 50 }} />
                 ) : report ? (
                     <View style={styles.chartWrapper}>
@@ -215,7 +250,8 @@ export default function UserReportScreen() {
                             onChangeText={setTempLimit}
                             keyboardType="numeric"
                             autoFocus
-                            placeholder="e.g. 2000"
+                            placeholder="0"
+                            placeholderTextColor="#ccc"
                         />
                         <View style={styles.modalButtons}>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.btnCancel}>
@@ -235,41 +271,58 @@ export default function UserReportScreen() {
 const styles = StyleSheet.create({
     container: { paddingBottom: 40 },
     header: { padding: 20 },
-    chartWrapper: { backgroundColor: '#fff', height: 350 },
+    chartWrapper: { backgroundColor: '#fff', height: 360, borderRadius: 0, overflow: 'hidden', marginHorizontal: 16, marginVertical: 12, borderWidth: 2, borderColor: '#007AFF' },
+    placeholderWrapper: { backgroundColor: '#fff', height: 360, borderRadius: 0, overflow: 'hidden', marginHorizontal: 16, marginVertical: 12, borderWidth: 2, borderColor: '#007AFF', justifyContent: 'center', alignItems: 'center' },
     limitHeader: {
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        padding: 12,
+        borderRadius: 0,
+        borderWidth: 2,
+        borderColor: '#007AFF',
         alignItems: 'center',
-        backgroundColor: '#f8f9fa', 
+        marginBottom: 12,
+        backgroundColor: '#ffffff',
     },
     limitLabel: { fontSize: 12, color: '#666', marginBottom: 4 },
-    limitValue: { fontSize: 24, fontWeight: 'bold' },
+    limitValue: { fontSize: 24, fontWeight: 'bold', color: '#007AFF' },
+    pixelEditIcon: {
+        width: 24,
+        height: 24,
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        borderRadius: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f0f7ff',
+    },
     // Modal 样式
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     modalContent: {
         width: '85%',
-        maxWidth: 400,
+        maxWidth: 320,
         backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 24,
+        borderRadius: 0,
+        borderWidth: 3,
+        borderColor: '#007AFF',
+        padding: 20,
     },
-    modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
+    modalTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 16, textAlign: 'center', color: '#007AFF' },
     input: {
-        borderWidth: 1,
-        borderColor: '#ddd',
+        borderWidth: 2,
+        borderColor: '#007AFF',
+        borderRadius: 0,
         padding: 12,
-        borderRadius: 8,
         fontSize: 18,
-        marginBottom: 24,
-        textAlign: 'center'
+        marginBottom: 20,
+        textAlign: 'center',
+        color: '#000',
+        backgroundColor: '#fff'
     },
-    modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-    btnCancel: { flex: 1, alignItems: 'center', padding: 12 },
-    btnConfirm: { flex: 1, alignItems: 'center', padding: 12, backgroundColor: '#007AFF', borderRadius: 8 },
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+    btnCancel: { flex: 1, alignItems: 'center', padding: 12, borderWidth: 2, borderColor: '#ccc', borderRadius: 0 },
+    btnConfirm: { flex: 1, alignItems: 'center', padding: 12, backgroundColor: '#007AFF', borderRadius: 0, borderWidth: 2, borderColor: '#007AFF' },
 });

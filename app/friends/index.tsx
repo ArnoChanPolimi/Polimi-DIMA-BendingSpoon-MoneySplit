@@ -3,6 +3,7 @@ import {
     addDoc,
     and,
     collection,
+    deleteDoc,
     doc,
     limit,
     onSnapshot,
@@ -55,17 +56,74 @@ export default function FriendsScreen() {
   // --- 逻辑 1：监听发给"我"的和"我发出的"申请 ---
   // 1. 在组件内部顶部增加状态
   const [myFriendIds, setMyFriendIds] = useState<string[]>([]);
+  const [allFriendsData, setAllFriendsData] = useState<any[]>([]);
 
   // 2. 插入新的监听逻辑 (就在逻辑 1 的 useEffect 后面)
   useEffect(() => {
     if (!auth.currentUser) return;
+    
+    const unsubscribers: (() => void)[] = [];
+    
     // 盯住红圈路径：users/我的ID/friends
     const colRef = collection(db, "users", auth.currentUser.uid, "friends");
     const unsubscribe = onSnapshot(colRef, (snap) => {
       // 把红圈里所有文档的 ID (好友UID) 拿出来存进状态
-      setMyFriendIds(snap.docs.map(d => d.id));
+      const friendIds = snap.docs.map(d => d.id);
+      setMyFriendIds(friendIds);
+      
+      // 清理之前的所有监听
+      unsubscribers.forEach(unsub => unsub());
+      unsubscribers.length = 0;
+      
+      // 从 users 集合实时获取好友的完整最新信息（包括头像更新）
+      const friendsDataMap: { [key: string]: any } = {};
+      let loadedCount = 0;
+      
+      snap.docs.forEach((docSnap) => {
+        const friendUid = docSnap.id;
+        
+        // 监听该好友的 users 集合文档，获取最新信息
+        const userDocRef = doc(db, "users", friendUid);
+        const unsubscribeUser = onSnapshot(userDocRef, (userSnap) => {
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            friendsDataMap[friendUid] = {
+              uid: friendUid,
+              displayName: userData.displayName || userData.username || 'Friend',
+              email: userData.email || '',
+              avatar: userData.avatar,
+            };
+          } else {
+            // 如果找不到用户，使用好友列表中的备用数据
+            friendsDataMap[friendUid] = {
+              uid: friendUid,
+              displayName: docSnap.data().displayName || 'Friend',
+              email: docSnap.data().email || '',
+              avatar: docSnap.data().avatar,
+            };
+          }
+          
+          // 当所有好友数据都加载完后，更新状态
+          loadedCount++;
+          if (loadedCount === snap.docs.length) {
+            const friendsData = snap.docs.map(d => friendsDataMap[d.id]);
+            setAllFriendsData(friendsData);
+          }
+        });
+        
+        unsubscribers.push(unsubscribeUser);
+      });
+      
+      // 如果没有好友，直接清空列表
+      if (snap.docs.length === 0) {
+        setAllFriendsData([]);
+      }
     });
-    return () => unsubscribe();
+    
+    return () => {
+      unsubscribe();
+      unsubscribers.forEach(unsub => unsub());
+    };
   }, []);
 
   // useEffect(() => {
@@ -290,6 +348,70 @@ export default function FriendsScreen() {
     setTimeout(() => setIsRefreshing(false), 300);
   };
 
+  // 删除好友函数
+  const handleDeleteFriend = async (friendUid: string, friendName: string) => {
+    Alert.alert(
+      "Delete Friend",
+      `Remove ${friendName} from your friends?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const myUid = auth.currentUser?.uid;
+              if (!myUid) return;
+
+              // 双向删除：从我的列表删除，也从对方的列表删除
+              const myFriendDocRef = doc(db, "users", myUid, "friends", friendUid);
+              const theirFriendDocRef = doc(db, "users", friendUid, "friends", myUid);
+
+              await Promise.all([
+                deleteDoc(myFriendDocRef),
+                deleteDoc(theirFriendDocRef),
+              ]);
+
+              Alert.alert("Success", `${friendName} has been removed from your friends.`);
+            } catch (error) {
+              console.error("删除好友失败:", error);
+              Alert.alert("Error", "Failed to delete friend.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // 处理头像的通用函数
+  const getAvatarSource = (item: any) => {
+    const avatar = item.avatar;
+    const username = item.username || item.displayName || 'User';
+    
+    // 如果是对象格式 { type: "default", value: "avatar_3" } - 使用预设头像
+    if (avatar && typeof avatar === 'object' && avatar.type === 'default' && avatar.value) {
+      const avatarKey = avatar.value as string;
+      if (DEFAULT_AVATARS[avatarKey]) {
+        return DEFAULT_AVATARS[avatarKey];
+      }
+    }
+    // 如果是对象格式 { type: "custom", value: "url" }
+    if (avatar && typeof avatar === 'object' && avatar.type === 'custom' && avatar.value) {
+      return { uri: avatar.value };
+    }
+    // 如果是对象格式 { type: "color", value: "#xxx" } - 使用颜色生成头像
+    if (avatar && typeof avatar === 'object' && avatar.type === 'color' && avatar.value) {
+      const color = avatar.value.replace('#', '');
+      return { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=${color}&color=fff` };
+    }
+    // 如果是字符串URL
+    if (typeof avatar === 'string' && avatar) {
+      return { uri: avatar };
+    }
+    // 默认头像
+    return { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=60a5fa&color=fff` };
+  };
+
   return (
     <AppScreen>
       <AppTopBar 
@@ -383,6 +505,38 @@ export default function FriendsScreen() {
           <View style={{ height: 1 }} />
         )}
 
+        {/* 4. 我的好友列表 - 只在没有搜索时显示 */}
+        {searchQuery.trim().length === 0 && (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>My Friends ({myFriendIds.length})</ThemedText>
+            {myFriendIds.length === 0 ? (
+              <ThemedText style={styles.empty}>No friends yet. Search and add some!</ThemedText>
+            ) : (
+              <View>
+                {/* 这里会显示好友列表 - 从数据库实时获取完整信息 */}
+                {allFriendsData.map((friend) => (
+                  <View key={friend.uid} style={styles.row}>
+                    <Image 
+                      source={getAvatarSource(friend)} 
+                      style={styles.avatar}
+                    />
+                    <View style={styles.info}>
+                      <ThemedText type="defaultSemiBold">{friend.displayName}</ThemedText>
+                      <ThemedText style={styles.details}>{friend.email || 'No email'}</ThemedText>
+                    </View>
+                    <Pressable 
+                      onPress={() => handleDeleteFriend(friend.uid, friend.displayName)}
+                      style={[styles.actionArea, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}
+                    >
+                      <ThemedText style={{ color: '#ef4444', fontSize: 12, fontWeight: 'bold' }}>Delete</ThemedText>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* 3. 搜索结果区 - 只在搜索后显示 */}
         {searchQuery.trim().length > 0 && (
           <View style={styles.section}>
@@ -402,38 +556,10 @@ export default function FriendsScreen() {
               // const isAlreadyFriend = (auth.currentUser as any)?.friends?.includes(item.id);
               const isAlreadyFriend = myFriendIds.includes(item.id);
 
-              // 处理头像：avatar 可能是对象 { type, value } 或字符串
-              const getAvatarSource = () => {
-                const avatar = item.avatar;
-                
-                // 如果是对象格式 { type: "default", value: "avatar_3" } - 使用预设头像
-                if (avatar && typeof avatar === 'object' && avatar.type === 'default' && avatar.value) {
-                  const avatarKey = avatar.value as string;
-                  if (DEFAULT_AVATARS[avatarKey]) {
-                    return DEFAULT_AVATARS[avatarKey];
-                  }
-                }
-                // 如果是对象格式 { type: "custom", value: "url" }
-                if (avatar && typeof avatar === 'object' && avatar.type === 'custom' && avatar.value) {
-                  return { uri: avatar.value };
-                }
-                // 如果是对象格式 { type: "color", value: "#xxx" } - 使用颜色生成头像
-                if (avatar && typeof avatar === 'object' && avatar.type === 'color' && avatar.value) {
-                  const color = avatar.value.replace('#', '');
-                  return { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(item.username || 'U')}&background=${color}&color=fff` };
-                }
-                // 如果是字符串URL
-                if (typeof avatar === 'string' && avatar) {
-                  return { uri: avatar };
-                }
-                // 默认头像
-                return { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(item.username || 'User')}&background=60a5fa&color=fff` };
-              };
-
               return (
                 <View key={item.id} style={styles.row}>
                   <Image 
-                    source={getAvatarSource()} 
+                    source={getAvatarSource(item)} 
                     style={styles.avatar} 
                   />
                   <View style={styles.info}>
@@ -460,7 +586,7 @@ export default function FriendsScreen() {
             })}
             {/* 在 ScrollView 内部的搜索结果区下方 */}
             {searchResults.length === 0 && !loading && (
-              <ThemedText style={styles.empty}>No users found with "{searchQuery}"</ThemedText>
+              <ThemedText style={styles.empty}>No users found with &quot;{searchQuery}&quot;</ThemedText>
             )}
           </View>
         )}
