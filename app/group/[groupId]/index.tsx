@@ -430,12 +430,13 @@ import { PixelIcon } from '@/components/ui/PixelIcon';
 import { useCurrency } from '@/core/currency/CurrencyContext';
 import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
-// import { Picker } from '@react-native-picker/picker';
+import { convertCurrency } from '@/services/exchangeRateApi';
 
 type InvolvedFriend = {
   uid: string;
   displayName: string;
   claimedAmount?: string;
+  avatar?: { type: "default" | "color" | "custom"; value: string };
 };
 
 type GroupDetail = {
@@ -458,6 +459,65 @@ type ExpenseItem = {
   createdAt: number;
   participants: string[];
   payers: string[];
+  splitMode?: 'equal' | 'ratio' | 'custom';
+  splits?: { [uid: string]: number };
+  currency?: string;
+};
+
+// 默认头像库映射
+const DEFAULT_AVATARS: { [key: string]: any } = {
+  'avatar_1': require('@/assets/images/avatars/avatar_1.png'),
+  'avatar_2': require('@/assets/images/avatars/avatar_2.png'),
+  'avatar_3': require('@/assets/images/avatars/avatar_3.png'),
+  'avatar_4': require('@/assets/images/avatars/avatar_4.png'),
+  'avatar_5': require('@/assets/images/avatars/avatar_5.png'),
+  'avatar_6': require('@/assets/images/avatars/avatar_6.png'),
+  'avatar_7': require('@/assets/images/avatars/avatar_7.png'),
+  'avatar_8': require('@/assets/images/avatars/avatar_8.png'),
+};
+
+// 渲染头像组件
+const renderAvatar = (friend: InvolvedFriend | null, size: number = 32) => {
+  if (!friend) {
+    return (
+      <View style={{ width: size, height: size, borderRadius: 0, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
+        <ThemedText style={{ color: '#fff', fontWeight: 'bold', fontSize: size * 0.4 }}>U</ThemedText>
+      </View>
+    );
+  }
+
+  const displayName = friend.displayName || 'U';
+  
+  if (!friend.avatar) {
+    // 默认显示首字母
+    return (
+      <View style={{ width: size, height: size, borderRadius: 0, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
+        <ThemedText style={{ color: '#fff', fontWeight: 'bold', fontSize: Math.floor(size * 0.4) }}>{displayName[0].toUpperCase()}</ThemedText>
+      </View>
+    );
+  }
+
+  if (friend.avatar.type === 'default') {
+    const source = DEFAULT_AVATARS[friend.avatar.value];
+    if (source) {
+      return <Image source={source} style={{ width: size, height: size, borderRadius: 0 }} />;
+    }
+  } else if (friend.avatar.type === 'color') {
+    return (
+      <View style={{ width: size, height: size, borderRadius: 0, backgroundColor: friend.avatar.value, alignItems: 'center', justifyContent: 'center' }}>
+        <ThemedText style={{ color: '#fff', fontWeight: 'bold', fontSize: Math.floor(size * 0.4) }}>{displayName[0].toUpperCase()}</ThemedText>
+      </View>
+    );
+  } else if (friend.avatar.type === 'custom') {
+    return <Image source={{ uri: friend.avatar.value }} style={{ width: size, height: size, borderRadius: 0 }} />;
+  }
+
+  // 回退方案
+  return (
+    <View style={{ width: size, height: size, borderRadius: 0, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' }}>
+      <ThemedText style={{ color: '#fff', fontWeight: 'bold', fontSize: Math.floor(size * 0.4) }}>{displayName[0].toUpperCase()}</ThemedText>
+    </View>
+  );
 };
 
 export default function GroupDetailScreen() {
@@ -492,6 +552,29 @@ export default function GroupDetailScreen() {
   
   // 新增：Receipts 相关状态
   const [receipts, setReceipts] = useState<string[]>([]);
+  
+  // 新增：Expense Detail Modal 状态
+  const [showExpenseDetailModal, setShowExpenseDetailModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
+  const [isEditingExpense, setIsEditingExpense] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedAmount, setEditedAmount] = useState('');
+  const [editedPayers, setEditedPayers] = useState<string[]>([]);
+  const [editedParticipants, setEditedParticipants] = useState<string[]>([]);
+  const [editedCurrency, setEditedCurrency] = useState(defaultCurrency);
+  const [editedSplitMode, setEditedSplitMode] = useState<'equal' | 'ratio' | 'custom'>('equal');
+  const [editedRatios, setEditedRatios] = useState<{ [uid: string]: string }>({});
+  const [editedCustomAmounts, setEditedCustomAmounts] = useState<{ [uid: string]: string }>({});
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  
+  // 添加：用于存储实时转换后的总金额
+  const [totalSpendingInBase, setTotalSpendingInBase] = useState(0);
+  
+  // 新增：日期选择相关状态
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
 
   // --- 1. 删除成员逻辑 (修正版) ---
   const handleRemoveMember = async (person: InvolvedFriend, role: 'payer' | 'participant') => {
@@ -549,6 +632,7 @@ export default function GroupDetailScreen() {
 
     const isAlreadyPayer = group.payerIds?.includes(friend.uid);
     const isAlreadyParticipant = group.participantIds?.includes(friend.uid);
+    const isAlreadyInvolvedFriend = group.involvedFriends?.some(f => f.uid === friend.uid);
 
     if (role === 'payer' && isAlreadyPayer) return;
     if (role === 'participant' && isAlreadyParticipant) return;
@@ -559,9 +643,12 @@ export default function GroupDetailScreen() {
       // 💡 关键修改：只提取最基础的字段，避免 claimedAmount 干扰匹配
       const basicFriend = { uid: friend.uid, displayName: friend.displayName };
       
-      const updateData: any = {
-        involvedFriends: arrayUnion(basicFriend) 
-      };
+      const updateData: any = {};
+      
+      // 只在还未加入的情况下才添加到 involvedFriends
+      if (!isAlreadyInvolvedFriend) {
+        updateData.involvedFriends = arrayUnion(basicFriend);
+      }
 
       if (role === 'payer') {
         updateData.payerIds = arrayUnion(friend.uid);
@@ -600,6 +687,47 @@ export default function GroupDetailScreen() {
     }
   };
 
+  // --- 4. 日期更新逻辑 ---
+  const handleUpdateDate = async () => {
+    if (!groupId) return;
+    try {
+      const date = new Date(selectedYear, selectedMonth - 1, selectedDay);
+      // 确保日期不超过今天
+      const today = new Date();
+      if (date > today) {
+        Alert.alert('Error', 'Cannot select future dates');
+        return;
+      }
+      const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const groupRef = doc(db, "groups", groupId);
+      await updateDoc(groupRef, { startDate: dateStr });
+      setShowDatePicker(false);
+      Alert.alert('Success', 'Group date updated successfully!');
+    } catch (e) {
+      console.error('Update date error:', e);
+      Alert.alert('Error', 'Failed to update group date');
+    }
+  };
+
+  // 获取当前月的天数
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month, 0).getDate();
+  };
+
+  // 生成年份数组（过去5年到今年）
+  const generateYears = () => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const years = [];
+    for (let i = currentYear; i >= currentYear - 5; i--) {
+      years.push(i);
+    }
+    return years;
+  };
+
+  // 生成月份数组
+  const generateMonths = () => Array.from({ length: 12 }, (_, i) => i + 1);
+
 
 
   // --- 5. 重置 Expense 表单 ---
@@ -637,6 +765,33 @@ export default function GroupDetailScreen() {
     } catch (e) {
       Alert.alert('Error', 'Failed to pick receipt image');
     }
+  };
+
+  // --- 完成群组功能 ---
+  const handleFinishGroup = async () => {
+    if (!groupId) return;
+    
+    Alert.alert(
+      'Finish Group?',
+      'This will mark the group as finished. Are you sure?',
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Finish',
+          onPress: async () => {
+            try {
+              const groupRef = doc(db, "groups", groupId);
+              await updateDoc(groupRef, { status: 'finished' });
+              Alert.alert('Success', 'Group finished successfully!');
+            } catch (error) {
+              console.error('Error finishing group:', error);
+              Alert.alert('Error', 'Failed to finish group');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
   };
 
   // --- 6. 打开 Expense Modal ---
@@ -690,9 +845,25 @@ export default function GroupDetailScreen() {
         });
       }
 
+      // 如果输入货币不是 EUR，转换到 EUR 基准货币
+      const baseCurrency = 'EUR';
+      let amountInBase = amount;
+
+      if (inputCurrency && inputCurrency !== baseCurrency) {
+        const conversionResult = await convertCurrency(
+          amount,
+          inputCurrency as any,
+          baseCurrency as any
+        );
+        if (conversionResult?.success) {
+          amountInBase = conversionResult.convertedAmount;
+        }
+      }
+
       const expenseData = {
         title: expenseTitle.trim(),
-        amount: amount,
+        amount: amount, // 保存原始输入的金额
+        currency: inputCurrency,
         inputCurrency: inputCurrency,
         inputAmount: parseFloat(expenseAmount),
         splitMode: splitMode,
@@ -704,8 +875,9 @@ export default function GroupDetailScreen() {
       };
 
       await addDoc(collection(db, "groups", groupId!, "expenses"), expenseData);
+      // 使用转换后的金额（EUR）更新总额
       await updateDoc(doc(db, "groups", groupId!), {
-        totalExpenses: increment(amount)
+        totalExpenses: increment(amountInBase)
       });
       setShowExpenseModal(false);
       resetExpenseForm();
@@ -715,6 +887,170 @@ export default function GroupDetailScreen() {
       Alert.alert('Error', 'Failed to save expense');
     }
   };
+
+  const handleSaveEditedExpense = async () => {
+    if (!selectedExpense || !groupId) return;
+    
+    try {
+      const parsedAmount = parseFloat(editedAmount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        Alert.alert('Error', 'Please enter a valid amount');
+        return;
+      }
+
+      if (!editedTitle.trim()) {
+        Alert.alert('Error', 'Please enter an expense name');
+        return;
+      }
+
+      if (editedPayers.length === 0) {
+        Alert.alert('Error', 'Please select at least one payer');
+        return;
+      }
+
+      if (editedParticipants.length === 0) {
+        Alert.alert('Error', 'Please select at least one participant');
+        return;
+      }
+
+      // Calculate splits based on split mode
+      let splits: { [uid: string]: number } = {};
+      const splitMode = editedSplitMode;
+
+      if (splitMode === 'equal') {
+        const splitAmount = parsedAmount / editedParticipants.length;
+        editedParticipants.forEach(pid => {
+          splits[pid] = splitAmount;
+        });
+      } else if (splitMode === 'ratio') {
+        // Use edited ratios
+        const totalRatio = editedParticipants.reduce((sum, pid) => {
+          const ratio = parseFloat(editedRatios[pid] || '0');
+          return sum + (isNaN(ratio) ? 0 : ratio);
+        }, 0);
+        
+        if (totalRatio > 0) {
+          editedParticipants.forEach(pid => {
+            const ratio = parseFloat(editedRatios[pid] || '0');
+            splits[pid] = isNaN(ratio) ? 0 : (ratio / totalRatio) * parsedAmount;
+          });
+        } else {
+          // Fallback to equal split
+          const splitAmount = parsedAmount / editedParticipants.length;
+          editedParticipants.forEach(pid => {
+            splits[pid] = splitAmount;
+          });
+        }
+      } else if (splitMode === 'custom') {
+        // Use edited custom amounts
+        const totalAmount = editedParticipants.reduce((sum, pid) => {
+          const amount = parseFloat(editedCustomAmounts[pid] || '0');
+          return sum + (isNaN(amount) ? 0 : amount);
+        }, 0);
+        
+        editedParticipants.forEach(pid => {
+          const amount = parseFloat(editedCustomAmounts[pid] || '0');
+          splits[pid] = isNaN(amount) ? 0 : amount;
+        });
+      }
+
+      // Update expense document
+      const expenseRef = doc(db, "groups", groupId, "expenses", selectedExpense.id);
+      await updateDoc(expenseRef, {
+        title: editedTitle,
+        amount: parsedAmount,
+        participants: editedParticipants,
+        payers: editedPayers,
+        splits: splits,
+        currency: editedCurrency,
+        splitMode: editedSplitMode,
+      });
+
+      // Calculate amount difference for group totalExpenses update
+      // If currency changed, need to convert to base currency for comparison
+      const baseCurrency = 'EUR'; // 设定 EUR 为基准货币
+      
+      let oldAmountInBase = selectedExpense.amount;
+      let newAmountInBase = parsedAmount;
+
+      // 如果旧账单有货币信息且不是 EUR，转换到 EUR
+      if (selectedExpense.currency && selectedExpense.currency !== baseCurrency) {
+        const conversionResult = await convertCurrency(
+          selectedExpense.amount,
+          selectedExpense.currency as any,
+          baseCurrency as any
+        );
+        if (conversionResult?.success) {
+          oldAmountInBase = conversionResult.convertedAmount;
+        }
+      }
+
+      // 如果新账单货币不是 EUR，转换到 EUR
+      if (editedCurrency && editedCurrency !== baseCurrency) {
+        const conversionResult = await convertCurrency(
+          parsedAmount,
+          editedCurrency as any,
+          baseCurrency as any
+        );
+        if (conversionResult?.success) {
+          newAmountInBase = conversionResult.convertedAmount;
+        }
+      }
+
+      const amountDifference = newAmountInBase - oldAmountInBase;
+
+      // Update group totalExpenses with converted amount
+      if (Math.abs(amountDifference) > 0.01) { // 使用 0.01 作为浮点数比较阈值
+        const groupRef = doc(db, "groups", groupId);
+        await updateDoc(groupRef, {
+          totalExpenses: increment(amountDifference),
+        });
+      }
+
+      setIsEditingExpense(false);
+      setShowExpenseDetailModal(false);
+      Alert.alert('Success', 'Expense updated successfully!');
+    } catch (e) {
+      console.error('Save edited expense error:', e);
+      Alert.alert('Error', 'Failed to update expense');
+    }
+  };
+
+  // 计算实时总金额（包含汇率转换）
+  const calculateTotalWithCurrencyConversion = async () => {
+    if (!expenses || expenses.length === 0) {
+      setTotalSpendingInBase(0);
+      return;
+    }
+
+    const baseCurrency = 'EUR';
+    let total = 0;
+
+    for (const expense of expenses) {
+      let amountInBase = expense.amount || 0;
+      
+      // 如果费用有货币信息且不是 EUR，转换到 EUR
+      if (expense.currency && expense.currency !== baseCurrency) {
+        const conversionResult = await convertCurrency(
+          amountInBase,
+          expense.currency as any,
+          baseCurrency as any
+        );
+        if (conversionResult?.success) {
+          amountInBase = conversionResult.convertedAmount;
+        }
+      }
+      
+      total += amountInBase;
+    }
+
+    setTotalSpendingInBase(total);
+  };
+
+  // 在 expenses 变化时重新计算总金额
+  useEffect(() => {
+    calculateTotalWithCurrencyConversion();
+  }, [expenses]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -743,13 +1079,30 @@ export default function GroupDetailScreen() {
 
   return (
     <AppScreen>
-      <AppTopBar title={group.name} showBack onBackPress={() => navigation.canGoBack() ? router.back() : router.replace("/")} rightIconName="chatbubbles-outline" onRightIconPress={() => router.push(`/group/${group.id}/chat`)} />
+      <AppTopBar 
+        title={group.name} 
+        showBack 
+        onBackPress={() => navigation.canGoBack() ? router.back() : router.replace("/")}
+        rightIconName={group.status === 'finished' ? undefined : "checkmark-done"}
+        onRightIconPress={group.status !== 'finished' ? handleFinishGroup : undefined}
+      />
       
       <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 16 }}>
         <ThemedView style={styles.headerCard}>
           <View style={styles.idBadge}><ThemedText style={styles.idBadgeText}>BILL NO: {group.id}</ThemedText></View>
-          <ThemedText style={styles.dateText}>{t('created')} {group.startDate}</ThemedText>
-          <ThemedText type="title" style={styles.totalAmount}>{group.totalExpenses.toFixed(2)} €</ThemedText>
+          <Pressable onPress={() => {
+            const [year, month, day] = group.startDate.split('-').map(Number);
+            setSelectedYear(year);
+            setSelectedMonth(month);
+            setSelectedDay(day);
+            setShowDatePicker(true);
+          }} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <ThemedText style={styles.dateText}>{t('date')} {group.startDate}</ThemedText>
+            <Ionicons name="create" size={16} color="#ffffff" />
+          </Pressable>
+          <ThemedText type="title" style={styles.totalAmount}>
+            {totalSpendingInBase.toFixed(2)} €
+          </ThemedText>
           <ThemedText style={styles.totalLabel}>{t('totalSpending')}</ThemedText>
         </ThemedView>
 
@@ -788,7 +1141,6 @@ export default function GroupDetailScreen() {
           {/* Owner Tab 内容 */}
           {activeTab === 'owner' && (
             <View style={styles.memberContent}>
-              <ThemedText style={styles.tabHint}>Group creator and organizer</ThemedText>
               <View style={styles.memberRow}>
                 {group.involvedFriends?.filter(f => f.uid === group.ownerId).map((f, i) => (
                   <View key={`owner-${f.uid}-${i}`} style={[styles.memberChip, styles.ownerChip]}>
@@ -805,7 +1157,6 @@ export default function GroupDetailScreen() {
           {/* Paid By Tab 内容 */}
           {activeTab === 'payer' && (
             <View style={styles.memberContent}>
-              <ThemedText style={styles.tabHint}>People who paid for expenses</ThemedText>
               <View style={styles.memberRow}>
                 {group.involvedFriends?.filter(f => group.payerIds?.includes(f.uid)).map((f, i) => (
                   <Pressable 
@@ -817,11 +1168,6 @@ export default function GroupDetailScreen() {
                       <ThemedText style={styles.memberAvatarText}>{f.displayName[0].toUpperCase()}</ThemedText>
                     </View>
                     <ThemedText style={styles.payerText}>{f.displayName}</ThemedText>
-                    {f.claimedAmount && (
-                      <View style={styles.amountBadge}>
-                        <ThemedText style={styles.amountBadgeText}>{f.claimedAmount}€</ThemedText>
-                      </View>
-                    )}
                     <Pressable 
                       onPress={(e) => { e.stopPropagation(); handleRemoveMember(f, 'payer'); }} 
                       style={styles.deleteBtn}
@@ -843,7 +1189,6 @@ export default function GroupDetailScreen() {
           {/* Splitting With Tab 内容 */}
           {activeTab === 'participant' && (
             <View style={styles.memberContent}>
-              <ThemedText style={styles.tabHint}>People splitting the expenses</ThemedText>
               <View style={styles.memberRow}>
                 {group.involvedFriends?.filter(f => group.participantIds?.includes(f.uid)).map((f, i) => (
                   <Pressable 
@@ -855,11 +1200,6 @@ export default function GroupDetailScreen() {
                       <ThemedText style={styles.memberAvatarText}>{f.displayName[0].toUpperCase()}</ThemedText>
                     </View>
                     <ThemedText style={styles.chipText}>{f.displayName}</ThemedText>
-                    {f.claimedAmount && (
-                      <View style={styles.amountBadge}>
-                        <ThemedText style={styles.amountBadgeText}>{f.claimedAmount}€</ThemedText>
-                      </View>
-                    )}
                     <Pressable 
                       onPress={(e) => { e.stopPropagation(); handleRemoveMember(f, 'participant'); }} 
                       style={styles.deleteBtn}
@@ -886,14 +1226,27 @@ export default function GroupDetailScreen() {
         ) : (
           <View>
             {expenses.map((item) => (
-              <View key={item.id} style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 12, marginBottom: 8 }}>
+              <Pressable 
+                key={item.id} 
+                onPress={() => {
+                  setSelectedExpense(item);
+                  setShowExpenseDetailModal(true);
+                }}
+                style={({ pressed }) => [
+                  { backgroundColor: pressed ? '#f0f7ff' : '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 12, marginBottom: 8 }
+                ]}
+              >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <ThemedText style={{ fontWeight: '600', fontSize: 14, color: '#1e293b' }}>{item.title}</ThemedText>
-                  <ThemedText style={{ fontWeight: 'bold', fontSize: 14, color: '#2563eb' }}>€{item.amount.toFixed(2)}</ThemedText>
+                  {typeof item.amount === 'number' && (
+                    <ThemedText style={{ fontWeight: 'bold', fontSize: 14, color: '#2563eb' }}>
+                      {((currencySymbols as any)[(item.currency as any) || 'EUR']) || item.currency || '€'}{item.amount.toFixed(2)}
+                    </ThemedText>
+                  )}
                 </View>
                 <ThemedText style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Paid by: {item.payers?.map((payerId: string) => group.involvedFriends?.find(f => f.uid === payerId)?.displayName).filter(Boolean).join(', ') || 'Unknown'}</ThemedText>
                 <ThemedText style={{ fontSize: 12, color: '#64748b' }}>Split with: {item.participants?.map((participantId: string) => group.involvedFriends?.find(f => f.uid === participantId)?.displayName).filter(Boolean).join(', ') || 'Everyone'}</ThemedText>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
@@ -1118,16 +1471,6 @@ export default function GroupDetailScreen() {
               </View>
             )}
 
-            {/* Preview */}
-            {splitMode === 'equal' && selectedParticipants.length > 0 && expenseAmount && (
-              <View style={styles.previewContainer}>
-                <ThemedText style={styles.previewTitle}>Preview (Equal Split)</ThemedText>
-                <ThemedText style={styles.previewText}>
-                  Each person pays: €{(parseFloat(expenseAmount) / selectedParticipants.length).toFixed(2)}
-                </ThemedText>
-              </View>
-            )}
-
             {/* Receipts 部分 */}
             <ThemedText style={styles.expenseLabel}>Receipts (Optional)</ThemedText>
             <ThemedText style={{ fontSize: 12, color: '#ffffff', marginBottom: 8 }}>{receipts.length} receipt(s) selected</ThemedText>
@@ -1196,12 +1539,426 @@ export default function GroupDetailScreen() {
             )}
             {allFriends.map((friend) => (
               <Pressable key={friend.uid} style={styles.friendSelectItem} onPress={() => { handleAddMember(friend, activeRole!); setIsModalVisible(false); }}>
+                <View style={{ width: 40, height: 40, borderRadius: 0, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                  <ThemedText style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{friend.displayName[0]?.toUpperCase() || 'U'}</ThemedText>
+                </View>
                 <ThemedText style={{ flex: 1 }}>{friend.displayName}</ThemedText>
                 <Ionicons name="person-add-outline" size={20} color="#2563eb" />
               </Pressable>
             ))}
           </ScrollView>
         </AppScreen>
+      </Modal>
+
+      {/* Expense Detail Modal */}
+      <Modal visible={showExpenseDetailModal} animationType="slide">
+        <AppScreen>
+          <View style={{ marginTop: 20 }}>
+            <AppTopBar 
+              title="Expense Details" 
+              showBack 
+              onBackPress={() => {
+                setShowExpenseDetailModal(false);
+                setIsEditingExpense(false);
+              }}
+              rightIconName={isEditingExpense ? "checkmark" : "pencil"}
+              onRightIconPress={() => {
+                if (isEditingExpense) {
+                  // 保存编辑
+                  handleSaveEditedExpense();
+                } else {
+                  setIsEditingExpense(true);
+                  if (selectedExpense) {
+                    setEditedTitle(selectedExpense.title);
+                    setEditedAmount(typeof selectedExpense.amount === 'number' ? selectedExpense.amount.toString() : '0');
+                    setEditedPayers(selectedExpense.payers || []);
+                    setEditedParticipants(selectedExpense.participants || []);
+                    setEditedCurrency((selectedExpense.currency as any) || defaultCurrency);
+                    setEditedSplitMode(selectedExpense.splitMode || 'equal');
+                    // 初始化 ratio 和 custom 值
+                    const ratios: { [uid: string]: string } = {};
+                    const customAmounts: { [uid: string]: string } = {};
+                    selectedExpense.participants?.forEach(pid => {
+                      const amount = selectedExpense.splits?.[pid] || 0;
+                      ratios[pid] = amount.toString();
+                      customAmounts[pid] = amount.toFixed(2);
+                    });
+                    setEditedRatios(ratios);
+                    setEditedCustomAmounts(customAmounts);
+                  }
+                }
+              }}
+            />
+          </View>
+          {selectedExpense && (
+            <ScrollView style={{ padding: 16 }}>
+              {/* Expense Title */}
+              <ThemedView style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 16, marginBottom: 16 }}>
+                <ThemedText style={{ fontSize: 12, opacity: 0.6, marginBottom: 8 }}>Expense Name</ThemedText>
+                {isEditingExpense ? (
+                  <TextInput
+                    style={styles.expenseInput}
+                    value={editedTitle}
+                    onChangeText={setEditedTitle}
+                    placeholder="Enter expense name"
+                  />
+                ) : (
+                  <ThemedText style={{ fontSize: 18, fontWeight: '700', color: '#1e293b' }}>{selectedExpense.title}</ThemedText>
+                )}
+              </ThemedView>
+
+              {/* Total Amount */}
+              <ThemedView style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 16, marginBottom: 16 }}>
+                <ThemedText style={{ fontSize: 12, opacity: 0.6, marginBottom: 8 }}>Total Amount</ThemedText>
+                {isEditingExpense ? (
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                      <TextInput
+                        style={[styles.expenseInput, { flex: 1, marginRight: 12 }]}
+                        value={editedAmount}
+                        onChangeText={setEditedAmount}
+                        placeholder="0.00"
+                        keyboardType="decimal-pad"
+                      />
+                      <Pressable
+                        onPress={() => setShowCurrencyPicker(!showCurrencyPicker)}
+                        style={{ flex: 0.35, borderWidth: 2, borderColor: '#2563eb', paddingHorizontal: 8, paddingVertical: 8, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' }}
+                      >
+                        <ThemedText style={{ fontWeight: '600', fontSize: 14, color: '#2563eb' }}>{editedCurrency}</ThemedText>
+                      </Pressable>
+                    </View>
+                    {showCurrencyPicker && (
+                      <View style={{ marginBottom: 12, paddingHorizontal: 8 }}>
+                        <ThemedText style={{ fontSize: 11, opacity: 0.6, marginBottom: 8 }}>Select Currency:</ThemedText>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {supportedCurrencies.map((curr) => (
+                            <Pressable
+                              key={curr}
+                              onPress={() => {
+                                setEditedCurrency(curr);
+                                setShowCurrencyPicker(false);
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 8,
+                                backgroundColor: editedCurrency === curr ? '#2563eb' : '#e2e8f0',
+                                borderWidth: 2,
+                                borderColor: '#2563eb',
+                                borderRadius: 0,
+                              }}
+                            >
+                              <ThemedText style={{ color: editedCurrency === curr ? '#fff' : '#1e293b', fontSize: 12, fontWeight: '600' }}>{curr}</ThemedText>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <ThemedText style={{ fontSize: 20, fontWeight: '700', color: '#2563eb' }}>
+                    {((currencySymbols as any)[(selectedExpense.currency as any) || 'EUR']) || selectedExpense.currency || '€'}{typeof selectedExpense.amount === 'number' ? selectedExpense.amount.toFixed(2) : '0.00'}
+                  </ThemedText>
+                )}
+              </ThemedView>
+
+              {/* Payers */}
+              <ThemedView style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 16, marginBottom: 16 }}>
+                <ThemedText style={{ fontSize: 12, fontWeight: '600', color: '#1e293b', marginBottom: 12 }}>Paid By</ThemedText>
+                {isEditingExpense ? (
+                  <View>
+                    {group?.involvedFriends?.map((friend) => (
+                      <Pressable
+                        key={friend.uid}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 8,
+                          backgroundColor: editedPayers.includes(friend.uid) ? '#dbeafe' : '#f8f9fa',
+                          paddingHorizontal: 8,
+                          marginBottom: 8,
+                          borderWidth: 2,
+                          borderColor: editedPayers.includes(friend.uid) ? '#2563eb' : '#e2e8f0',
+                        }}
+                        onPress={() => {
+                          if (editedPayers.includes(friend.uid)) {
+                            setEditedPayers(editedPayers.filter(uid => uid !== friend.uid));
+                          } else {
+                            setEditedPayers([...editedPayers, friend.uid]);
+                          }
+                        }}
+                      >
+                        <View style={{ marginRight: 12 }}>
+                          {renderAvatar(friend, 32)}
+                        </View>
+                        <ThemedText style={{ flex: 1, color: '#1e293b', fontSize: 13 }}>{friend.displayName}</ThemedText>
+                        <Ionicons
+                          name={editedPayers.includes(friend.uid) ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                          size={20}
+                          color={editedPayers.includes(friend.uid) ? '#2563eb' : '#cbd5e1'}
+                        />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : (
+                  selectedExpense.payers?.map((payerId) => {
+                    const payer = group?.involvedFriends?.find(f => f.uid === payerId);
+                    return (
+                      <View key={payerId} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
+                        <View style={{ marginRight: 12 }}>
+                          {payer && renderAvatar(payer, 32)}
+                        </View>
+                        <ThemedText style={{ color: '#1e293b', fontSize: 13 }}>{payer?.displayName}</ThemedText>
+                      </View>
+                    );
+                  })
+                )}
+              </ThemedView>
+
+              {/* Split Mode and Details */}
+              <ThemedView style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 16, marginBottom: 16 }}>
+                <ThemedText style={{ fontSize: 12, fontWeight: '600', color: '#1e293b', marginBottom: 12 }}>Split Details</ThemedText>
+                {isEditingExpense ? (
+                  <View>
+                    <View style={{ marginBottom: 12 }}>
+                      <ThemedText style={{ fontSize: 10, opacity: 0.6, marginBottom: 6, fontWeight: '600', textTransform: 'uppercase' }}>Split Mode</ThemedText>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6 }}>
+                        {(['equal', 'ratio', 'custom'] as const).map((mode) => (
+                          <Pressable
+                            key={mode}
+                            style={{
+                              flex: 1,
+                              paddingHorizontal: 8,
+                              paddingVertical: 6,
+                              backgroundColor: editedSplitMode === mode ? '#2563eb' : '#e2e8f0',
+                              borderWidth: 2,
+                              borderColor: '#2563eb',
+                              borderRadius: 0,
+                            }}
+                            onPress={() => setEditedSplitMode(mode)}
+                          >
+                            <ThemedText style={{ color: editedSplitMode === mode ? '#fff' : '#1e293b', fontSize: 10, fontWeight: '600', textAlign: 'center' }}>
+                              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                            </ThemedText>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                    <View>
+                      <ThemedText style={{ fontSize: 10, opacity: 0.6, marginBottom: 6, fontWeight: '600', textTransform: 'uppercase' }}>Split Details</ThemedText>
+                      {group?.involvedFriends?.map((friend) => {
+                        const isSelected = editedParticipants.includes(friend.uid);
+                        const currentAmount = selectedExpense.splits?.[friend.uid] || 0;
+                        return (
+                          <View key={friend.uid}>
+                            <Pressable
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                paddingVertical: 6,
+                                backgroundColor: isSelected ? '#dbeafe' : '#f8f9fa',
+                                paddingHorizontal: 8,
+                                marginBottom: isSelected ? 4 : 4,
+                                borderWidth: 2,
+                                borderColor: isSelected ? '#2563eb' : '#e2e8f0',
+                              }}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setEditedParticipants(editedParticipants.filter(uid => uid !== friend.uid));
+                                } else {
+                                  setEditedParticipants([...editedParticipants, friend.uid]);
+                                }
+                              }}
+                            >
+                              <View style={{ marginRight: 8 }}>
+                                {renderAvatar(friend, 28)}
+                              </View>
+                              <ThemedText style={{ flex: 1, color: '#1e293b', fontSize: 12, fontWeight: '500' }}>{friend.displayName}</ThemedText>
+                              <Ionicons
+                                name={isSelected ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                                size={18}
+                                color={isSelected ? '#2563eb' : '#cbd5e1'}
+                              />
+                            </Pressable>
+                            {isSelected && editedSplitMode === 'ratio' && (
+                              <View style={{ marginLeft: 8, marginBottom: 4, paddingLeft: 36, paddingRight: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <ThemedText style={{ fontSize: 10, color: '#64748b', fontWeight: '500', width: 40 }}>Ratio</ThemedText>
+                                <TextInput
+                                  style={[styles.expenseInput, { flex: 1, height: 28, fontSize: 11, paddingVertical: 4, paddingHorizontal: 6 }]}
+                                  value={editedRatios[friend.uid] || ''}
+                                  onChangeText={(text) => setEditedRatios({ ...editedRatios, [friend.uid]: text })}
+                                  placeholder="1"
+                                  keyboardType="decimal-pad"
+                                />
+                              </View>
+                            )}
+                            {isSelected && editedSplitMode === 'custom' && (
+                              <View style={{ marginLeft: 8, marginBottom: 4, paddingLeft: 36, paddingRight: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <ThemedText style={{ fontSize: 10, color: '#64748b', fontWeight: '500', width: 40 }}>Amount</ThemedText>
+                                <TextInput
+                                  style={[styles.expenseInput, { flex: 1, height: 28, fontSize: 11, paddingVertical: 4, paddingHorizontal: 6 }]}
+                                  value={editedCustomAmounts[friend.uid] || ''}
+                                  onChangeText={(text) => setEditedCustomAmounts({ ...editedCustomAmounts, [friend.uid]: text })}
+                                  placeholder="0.00"
+                                  keyboardType="decimal-pad"
+                                />
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <ThemedText style={{ fontSize: 10, opacity: 0.6, marginBottom: 8, fontWeight: '600', textTransform: 'uppercase' }}>Mode: {selectedExpense.splitMode ? selectedExpense.splitMode.charAt(0).toUpperCase() + selectedExpense.splitMode.slice(1) : 'Equal'}</ThemedText>
+                    {selectedExpense.participants?.map((participantId) => {
+                      const participant = group?.involvedFriends?.find(f => f.uid === participantId);
+                      const amount = selectedExpense.splits?.[participantId] || 0;
+                      let currencySymbol = '€';
+                      if (selectedExpense.currency && typeof selectedExpense.currency === 'string') {
+                        currencySymbol = (currencySymbols as any)[selectedExpense.currency] || '€';
+                      }
+                      return (
+                        <View key={participantId} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={{ marginRight: 12 }}>
+                              {participant && renderAvatar(participant, 28)}
+                            </View>
+                            <ThemedText style={{ color: '#1e293b', fontSize: 13 }}>{participant?.displayName}</ThemedText>
+                          </View>
+                          <ThemedText style={{ fontWeight: '600', color: '#2563eb', fontSize: 13 }}>{currencySymbol}{amount.toFixed(2)}</ThemedText>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+              </ThemedView>
+            </ScrollView>
+          )}
+        </AppScreen>
+      </Modal>
+
+      {/* 日期选择 Modal - 分开年月日 */}
+      <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setShowDatePicker(false)} />
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <ThemedText style={{ fontSize: 16, fontWeight: '700', color: '#1e293b' }}>Select Date</ThemedText>
+            <Pressable onPress={() => setShowDatePicker(false)}>
+              <Ionicons name="close" size={24} color="#1e293b" />
+            </Pressable>
+          </View>
+
+          {/* 年月日选择器 */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 16 }}>
+            {/* 年份选择 */}
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: '600' }}>Year</ThemedText>
+              <ScrollView style={{ maxHeight: 150, borderWidth: 2, borderColor: '#2563eb', borderRadius: 0 }}>
+                {generateYears().map((year) => (
+                  <Pressable
+                    key={year}
+                    onPress={() => setSelectedYear(year)}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      backgroundColor: selectedYear === year ? '#dbeafe' : '#fff',
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#e2e8f0',
+                    }}
+                  >
+                    <ThemedText style={{ 
+                      textAlign: 'center', 
+                      color: selectedYear === year ? '#2563eb' : '#64748b',
+                      fontWeight: selectedYear === year ? '600' : 'normal'
+                    }}>
+                      {year}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* 月份选择 */}
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: '600' }}>Month</ThemedText>
+              <ScrollView style={{ maxHeight: 150, borderWidth: 2, borderColor: '#2563eb', borderRadius: 0 }}>
+                {generateMonths().map((month) => (
+                  <Pressable
+                    key={month}
+                    onPress={() => setSelectedMonth(month)}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      backgroundColor: selectedMonth === month ? '#dbeafe' : '#fff',
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#e2e8f0',
+                    }}
+                  >
+                    <ThemedText style={{ 
+                      textAlign: 'center', 
+                      color: selectedMonth === month ? '#2563eb' : '#64748b',
+                      fontWeight: selectedMonth === month ? '600' : 'normal'
+                    }}>
+                      {month.toString().padStart(2, '0')}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* 日期选择 */}
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontSize: 12, color: '#64748b', marginBottom: 8, fontWeight: '600' }}>Day</ThemedText>
+              <ScrollView style={{ maxHeight: 150, borderWidth: 2, borderColor: '#2563eb', borderRadius: 0 }}>
+                {Array.from({ length: getDaysInMonth(selectedYear, selectedMonth) }, (_, i) => i + 1).map((day) => (
+                  <Pressable
+                    key={day}
+                    onPress={() => setSelectedDay(day)}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      backgroundColor: selectedDay === day ? '#dbeafe' : '#fff',
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#e2e8f0',
+                    }}
+                  >
+                    <ThemedText style={{ 
+                      textAlign: 'center', 
+                      color: selectedDay === day ? '#2563eb' : '#64748b',
+                      fontWeight: selectedDay === day ? '600' : 'normal'
+                    }}>
+                      {day.toString().padStart(2, '0')}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+
+          {/* 预览和确认按钮 */}
+          <View style={{ backgroundColor: '#f0f7ff', borderWidth: 2, borderColor: '#2563eb', borderRadius: 0, padding: 12, marginBottom: 16 }}>
+            <ThemedText style={{ color: '#64748b', fontSize: 12, marginBottom: 6 }}>Selected Date:</ThemedText>
+            <ThemedText style={{ color: '#2563eb', fontSize: 16, fontWeight: '700' }}>
+              {new Date(selectedYear, selectedMonth - 1, selectedDay).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+            </ThemedText>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable
+              onPress={() => setShowDatePicker(false)}
+              style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#e2e8f0', borderWidth: 2, borderColor: '#cbd5e1', borderRadius: 0, alignItems: 'center' }}
+            >
+              <ThemedText style={{ color: '#1e293b', fontWeight: '600' }}>Cancel</ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={handleUpdateDate}
+              style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#2563eb', borderWidth: 2, borderColor: '#1e40af', borderRadius: 0, alignItems: 'center' }}
+            >
+              <ThemedText style={{ color: '#fff', fontWeight: '600' }}>Confirm</ThemedText>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </AppScreen>
   );
@@ -1257,11 +2014,6 @@ const styles = StyleSheet.create({
   },
   memberContent: {
     minHeight: 80,
-  },
-  tabHint: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginBottom: 12,
   },
   memberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   memberChip: { 

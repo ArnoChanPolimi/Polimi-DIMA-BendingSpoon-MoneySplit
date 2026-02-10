@@ -119,7 +119,7 @@
 // services/statsManager.ts
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { Dimensions } from 'react-native';
 import { generateMonthlyBarChartUrl } from './external/quickChart';
 import { db } from './firebase';
@@ -234,5 +234,222 @@ export const getUserGlobalStatsUrl = async (userId: string, limit: number = 2000
   } catch (error) {
     console.error("Stats Error:", error);
     return null;
+  }
+};
+
+/**
+ * 获取当前用户本月的消费总额
+ */
+export const getCurrentMonthSpend = async (userId: string): Promise<number> => {
+  try {
+    const currentMonth = new Date().toISOString().substring(0, 7); // 得到 "2026-02"
+    const groupsRef = collection(db, 'groups');
+    const qGroups = query(groupsRef, where('participantIds', 'array-contains', userId));
+    const groupSnap = await getDocs(qGroups);
+    
+    let total = 0;
+
+    groupSnap.forEach(doc => {
+      const data = doc.data();
+      // 只算本月的账单
+      if (data.startDate && data.startDate.startsWith(currentMonth)) {
+        const myRecord = data.involvedFriends?.find((f: any) => f.uid === userId);
+        if (myRecord && myRecord.claimedAmount) {
+          total += parseFloat(myRecord.claimedAmount) || 0;
+        }
+      }
+    });
+
+    return total;
+  } catch (error) {
+    console.error("Fetch current month spend error:", error);
+    return 0;
+  }
+};
+
+/**
+ * 实时监听用户的统计数据变化
+ * 返回 unsubscribe 函数用于清理监听
+ * 
+ * 核心逻辑：
+ * 1. 查询用户参与的所有 groups
+ * 2. 对每个 group 的 expenses 子集合进行监听
+ * 3. 从每个 expense 的 splits[userId] 读取实际支出
+ * 4. 支持多币种：非 EUR 的金额需要转换为 EUR
+ * 5. 按月份聚合，生成图表
+ */
+export const subscribeToUserStats = (
+  userId: string,
+  limit: number,
+  onUpdate: (data: { url: string; width: number; count: number; thisMonthTotal: number } | null) => void
+): (() => void) => {
+  try {
+    const groupsRef = collection(db, 'groups');
+    const qGroups = query(groupsRef, where('participantIds', 'array-contains', userId));
+    
+    // 用来存储所有的 expense 监听器，以便清理
+    const expenseUnsubscribers: (() => void)[] = [];
+    // 用来存储每个 group 的月份数据
+    const groupMonthlyData: { [groupId: string]: { [month: string]: number } } = {};
+    
+    const generateChartFromAllGroups = () => {
+      const monthlyTotals: { [key: string]: number } = {};
+      let thisMonthTotal = 0;
+      
+      // 合并所有 groups 的月份数据
+      Object.values(groupMonthlyData).forEach(groupData => {
+        Object.entries(groupData).forEach(([month, amount]) => {
+          monthlyTotals[month] = (monthlyTotals[month] || 0) + amount;
+        });
+      });
+      
+      const sortedMonths = Object.keys(monthlyTotals).sort();
+      if (sortedMonths.length === 0) {
+        onUpdate(null);
+        return;
+      }
+
+      const labels: string[] = [];
+      const safeData: number[] = [];
+      const excessData: (number | null)[] = [];
+      const bgColorsSafe: string[] = [];
+      const bgColorsExcess: string[] = [];
+
+      const now = new Date();
+      const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      // 🔑 固定显示3个月：当前月 + 前2个月
+      const monthsToShow = 3;
+      for (let i = monthsToShow - 1; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const total = Math.round(monthlyTotals[key] || 0);
+        labels.push(key);
+
+        if (key === currentMonthStr) {
+          thisMonthTotal = total;
+
+          if (total > limit) {
+            safeData.push(Math.round(limit));
+            excessData.push(Math.round(total - limit));
+            bgColorsSafe.push('#2563eb');
+            bgColorsExcess.push('#FA5151');
+          } else {
+            safeData.push(total);
+            excessData.push(0);
+            bgColorsSafe.push('#2563eb');
+            bgColorsExcess.push('transparent');
+          }
+        } else {
+          safeData.push(total);
+          excessData.push(null);
+          bgColorsSafe.push('#93c5fd');
+          bgColorsExcess.push('transparent');
+        }
+      }
+
+      const barTotalHeights = labels.map((_, i) => {
+        const base = safeData[i] || 0;
+        const extra = Number(excessData[i]) || 0;
+        return base + extra;
+      });
+
+      const maxValue = Math.max(...barTotalHeights, Math.round(limit));
+      // 固定宽度，6个月刚好适合屏幕
+      const dynamicWidth = Math.max(screenWidth - 32, 350);
+
+      const url = generateMonthlyBarChartUrl(
+        labels,
+        safeData,
+        excessData,
+        Math.round(limit),
+        dynamicWidth,
+        bgColorsSafe,
+        bgColorsExcess,
+        maxValue
+      );
+
+      onUpdate({
+        url,
+        width: dynamicWidth,
+        count: labels.length,
+        thisMonthTotal
+      });
+    };
+    
+    // 主 groups 监听器
+    const groupUnsubscribe = onSnapshot(qGroups, async (groupSnap) => {
+      // 清理旧的 expense 监听器
+      expenseUnsubscribers.forEach(u => u());
+      expenseUnsubscribers.length = 0;
+      groupMonthlyData.length = 0;
+
+      // 为每个 group 创建 expense 监听器
+      for (const groupDoc of groupSnap.docs) {
+        const groupData = groupDoc.data();
+        const groupId = groupDoc.id;
+        
+        // 🔑 获取 group 的 startDate 作为所有 expense 的月份
+        const groupStartDate = groupData.startDate; // 格式: "YYYY-MM-DD"
+        const groupMonthKey = groupStartDate ? groupStartDate.substring(0, 7) : null; // 格式: "YYYY-MM"
+        
+        groupMonthlyData[groupId] = {};
+        
+        const expensesRef = collection(db, 'groups', groupId, 'expenses');
+        const expenseUnsubscribe = onSnapshot(expensesRef, async (expenseSnap) => {
+          // 计算这个 group 的所有月份数据
+          const newMonthlyTotals: { [key: string]: number } = {};
+          
+          for (const expenseDoc of expenseSnap.docs) {
+            const expenseData = expenseDoc.data();
+            const userSplitAmount = expenseData.splits?.[userId] || 0;
+            
+            if (userSplitAmount > 0 && groupMonthKey) {
+              // 🔑 所有 expense 使用 group 的 startDate 月份
+              const monthKey = groupMonthKey;
+              
+              // 支持多币种转换
+              let amountInBase = userSplitAmount;
+              if (expenseData.currency && expenseData.currency !== 'EUR') {
+                try {
+                  const { convertCurrency } = await import('./exchangeRateApi');
+                  const conversionResult = await convertCurrency(
+                    userSplitAmount,
+                    expenseData.currency,
+                    'EUR'
+                  );
+                  if (conversionResult?.success) {
+                    amountInBase = conversionResult.convertedAmount;
+                  }
+                } catch (err) {
+                  console.warn(`Currency conversion failed for ${expenseData.currency}:`, err);
+                }
+              }
+              
+              newMonthlyTotals[monthKey] = (newMonthlyTotals[monthKey] || 0) + amountInBase;
+            }
+          }
+          
+          // 更新这个 group 的数据
+          groupMonthlyData[groupId] = newMonthlyTotals;
+          
+          // 触发图表重新生成
+          generateChartFromAllGroups();
+        });
+        
+        expenseUnsubscribers.push(expenseUnsubscribe);
+      }
+    }, (error) => {
+      console.error("Stats subscription error:", error);
+      onUpdate(null);
+    });
+
+    return () => {
+      groupUnsubscribe();
+      expenseUnsubscribers.forEach(u => u());
+    };
+  } catch (error) {
+    console.error("Failed to subscribe to stats:", error);
+    return () => {};
   }
 };

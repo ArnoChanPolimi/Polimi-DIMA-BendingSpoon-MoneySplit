@@ -219,7 +219,7 @@ export const generateMonthlyBarChartUrl = (
   width: number,
   bgColorsSafe: string[],
   bgColorsExcess: string[],
-  maxValue: number // ✨ 1. 这里必须接收这个参数
+  maxValue: number
 ) => {
   const chartConfig = {
     type: 'bar',
@@ -239,11 +239,12 @@ export const generateMonthlyBarChartUrl = (
           display: true,
           anchor: 'end',
           align: 'top',
-          color: '#64748b',
+          offset: 5,
+          color: '#1f2937',
           font: { 
             weight: 'bold', 
-            size: 13, 
-            family: 'sans-serif' 
+            size: 18, 
+            family: 'Arial'
           },
           formatter: (val: any, ctx: any) => {
             const idx = ctx.dataIndex;
@@ -272,20 +273,19 @@ export const generateMonthlyBarChartUrl = (
           stacked: true, 
           display: false, 
           ticks: { 
-            beginAtZero: true, 
-            // ✨ 2. 核心修改：把 suggestedMax 改成强制性的 max
-            // 使用传入的 maxValue 乘以 1.4，预留出顶部空间
-            max: (maxValue || limit) * 1.4 
+            beginAtZero: true,
+            max: (maxValue || limit) * 1.2
           } 
         }],
         xAxes: [{ 
           stacked: true, 
           gridLines: { display: false }, 
-          barPercentage: 0.5, 
-          categoryPercentage: 0.8,
+          barPercentage: 0.7, 
+          categoryPercentage: 0.85,
           ticks: {
-            fontColor: '#94a3b8',
-            fontSize: 11
+            fontColor: '#1f2937',
+            fontSize: 14,
+            fontStyle: 'bold'
           }
         }]
       }
