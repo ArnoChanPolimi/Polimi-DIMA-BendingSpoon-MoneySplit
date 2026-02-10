@@ -79,6 +79,23 @@
 //       return;
 //     }
 
+// [FIX] Remove stray ternary JSX outside of a return block (lines 61-65)
+// The following code is invalid outside of a JSX return:
+// <ThemedText style={{ opacity: 0.5, textAlign: 'center', padding: 20 }}>No records found.</ThemedText>
+// ) : (
+//   expenses.map((item) => (
+//     <View key={item.id} style={styles.expenseRow}>
+//       <View style={{ flex: 1 }}>
+//         <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
+//         <ThemedText style={styles.participantsText}>Involved: {item.participants?.join(', ') || 'Everyone'}</ThemedText>
+//       </View>
+//       <ThemedText type="defaultSemiBold" style={styles.amountText}>-{item.amount.toFixed(2)} €</ThemedText>
+//     </View>
+//   ))
+// )
+
+// This logic should only appear inside a JSX return, which is already present in the Expense History section below.
+
 //     try {
 //       // 2. 选择图片
 //       const result = await ImagePicker.launchImageLibraryAsync({
@@ -279,31 +296,7 @@
 //           </View>
 //         </View>
 //         {/* --- 新增：小票展示区域 --- */}
-//         <ThemedText type="subtitle" style={styles.sectionTitle}>Receipts</ThemedText>
-//         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.receiptScroll}>
-//           {/* 1. 已有的小票列表 */}
-//           {group.receiptUrls?.map((url, index) => (
-//             <Pressable key={index}>
-//               <Image source={{ uri: url }} style={styles.receiptImage} />
-//             </Pressable>
-//           ))}
 
-//           {/* 2. 新增的“追加上传”按钮 */}
-//           <Pressable 
-//             style={styles.addReceiptBtn} 
-//             onPress={handleAddReceipt}
-//             disabled={loading}
-//           >
-//             {loading ? (
-//               <ThemedText style={styles.addReceiptText}>Uploading...</ThemedText>
-//             ) : (
-//               <>
-//                 <Ionicons name="add-circle-outline" size={32} color="#64748b" />
-//                 <ThemedText style={styles.addReceiptText}>Add More</ThemedText>
-//               </>
-//             )}
-//           </Pressable>
-//         </ScrollView>
 //       </ScrollView>
 //       {/* 选择好友的弹窗 */}
 //       <Modal visible={isModalVisible} animationType="slide" presentationStyle="pageSheet">
@@ -390,44 +383,7 @@
 //     borderWidth: 1,
 //     borderColor: '#f0f0f0',
 //   },
-//   receiptScroll: { marginTop: 12, flexDirection: 'row' },
-//   receiptImage: { 
-//     width: 150, 
-//     height: 200, 
-//     borderRadius: 12, 
-//     marginRight: 12, 
-//     backgroundColor: '#f1f5f9',
-//     borderWidth: 1,
-//     borderColor: '#e2e8f0'
-//   },
-//   emptyReceiptBox: {
-//     padding: 20,
-//     borderWidth: 1,
-//     borderColor: '#e2e8f0',
-//     borderStyle: 'dashed',
-//     borderRadius: 12,
-//     alignItems: 'center',
-//     width: '100%'
-//   },
-//   emptyText: { color: '#94a3b8', fontSize: 12, marginTop: 4 },
-//   addReceiptBtn: {
-//     width: 150,
-//     height: 200,
-//     borderRadius: 12,
-//     borderWidth: 1,
-//     borderColor: '#cbd5e1',
-//     borderStyle: 'dashed',
-//     backgroundColor: '#f8fafc',
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     marginRight: 12,
-//   },
-//   addReceiptText: {
-//     fontSize: 12,
-//     color: '#64748b',
-//     marginTop: 8,
-//     fontWeight: '600'
-//   },
+
 //   roleContainer: {
 //     backgroundColor: '#fff',
 //     borderRadius: 16,
@@ -458,20 +414,23 @@
 
 // app\group\[groupId]\index.tsx
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
-import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { arrayRemove, arrayUnion, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, doc, increment, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
+import { PixelIcon } from '@/components/ui/PixelIcon';
+import { useCurrency } from '@/core/currency/CurrencyContext';
 import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
-import * as ImagePicker from 'expo-image-picker';
+// import { Picker } from '@react-native-picker/picker';
 
 type InvolvedFriend = {
   uid: string;
@@ -498,19 +457,41 @@ type ExpenseItem = {
   amount: number;
   createdAt: number;
   participants: string[];
+  payers: string[];
 };
 
 export default function GroupDetailScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const navigation = useNavigation();
   const { language } = useSettings();
-  
+
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [allFriends, setAllFriends] = useState<InvolvedFriend[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [activeRole, setActiveRole] = useState<'payer' | 'participant'>('participant');
+  const [activeTab, setActiveTab] = useState<'owner' | 'payer' | 'participant'>('owner');
+
+  // Add Expense 相关状态
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseTitle, setExpenseTitle] = useState('');
+  // 多币种输入
+  const { defaultCurrency, convertAmount, supportedCurrencies, currencySymbols } = useCurrency();
+  const [inputCurrency, setInputCurrency] = useState(defaultCurrency);
+  const [expenseAmount, setExpenseAmount] = useState(''); // 输入框金额
+  const [convertedAmount, setConvertedAmount] = useState<string>(''); // 主币种金额
+  const [isConverting, setIsConverting] = useState(false);
+  const [splitMode, setSplitMode] = useState<'equal' | 'ratio' | 'custom'>('equal');
+  const [selectedPayers, setSelectedPayers] = useState<string[]>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [ratios, setRatios] = useState<{ [uid: string]: string }>({});
+  const [customAmounts, setCustomAmounts] = useState<{ [uid: string]: string }>({});
+  // 币种选择 Modal 状态
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  
+  // 新增：Receipts 相关状态
+  const [receipts, setReceipts] = useState<string[]>([]);
 
   // --- 1. 删除成员逻辑 (修正版) ---
   const handleRemoveMember = async (person: InvolvedFriend, role: 'payer' | 'participant') => {
@@ -619,19 +600,120 @@ export default function GroupDetailScreen() {
     }
   };
 
-  // --- 4. 图片上传逻辑 ---
-  const handleAddReceipt = async () => {
+
+
+  // --- 5. 重置 Expense 表单 ---
+  const resetExpenseForm = () => {
+    setExpenseTitle('');
+    setExpenseAmount('');
+    setConvertedAmount('');
+    setInputCurrency(defaultCurrency);
+    setIsConverting(false);
+    setSplitMode('equal');
+    setSelectedPayers([]);
+    setSelectedParticipants([]);
+    setRatios({});
+    setCustomAmounts({});
+    setReceipts([]);
+  };
+
+  // 选择收据图片
+  const pickReceipt = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need camera roll permissions to upload receipts.');
+      return;
+    }
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.5 });
-      if (!result.canceled && result.assets && groupId) {
-        setLoading(true);
-        const uploadedUrl = await uploadImageAndGetUrl(result.assets[0].uri, groupId);
-        await updateDoc(doc(db, "groups", groupId), { receiptUrls: arrayUnion(uploadedUrl) });
-        setLoading(false);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.5,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newUri = result.assets[0].uri;
+        setReceipts((prev) => [...prev, newUri]);
       }
-    } catch (e) { setLoading(false); }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to pick receipt image');
+    }
+  };
+
+  // --- 6. 打开 Expense Modal ---
+  const openExpenseModal = () => {
+    // 默认选中所有参与者
+    const allParticipantIds = group?.participantIds || [];
+    setSelectedParticipants(allParticipantIds);
+    // 默认选中所有付款人
+    const allPayerIds = group?.payerIds || [];
+    setSelectedPayers(allPayerIds.length > 0 ? allPayerIds : (auth.currentUser ? [auth.currentUser.uid] : []));
+    setShowExpenseModal(true);
+  };
+
+  // --- 7. 保存 Expense ---
+  const handleSaveExpense = async () => {
+    // 以主币种金额为准
+    const amount = parseFloat(convertedAmount);
+    if (!expenseTitle.trim() || isNaN(amount) || amount <= 0) {
+      Alert.alert('Error', 'Please enter a valid title and amount');
+      return;
+    }
+    if (selectedParticipants.length === 0) {
+      Alert.alert('Error', 'Please select at least one participant');
+      return;
+    }
+    if (selectedPayers.length === 0) {
+      Alert.alert('Error', 'Please select at least one payer');
+      return;
+    }
+
+    try {
+      // 计算每人应付金额
+      let splits: { [uid: string]: number } = {};
+      if (splitMode === 'equal') {
+        const perPerson = amount / selectedParticipants.length;
+        selectedParticipants.forEach(uid => {
+          splits[uid] = perPerson;
+        });
+      } else if (splitMode === 'ratio') {
+        let totalRatio = 0;
+        selectedParticipants.forEach(uid => {
+          totalRatio += parseFloat(ratios[uid] || '1');
+        });
+        selectedParticipants.forEach(uid => {
+          const ratio = parseFloat(ratios[uid] || '1');
+          splits[uid] = (ratio / totalRatio) * amount;
+        });
+      } else {
+        selectedParticipants.forEach(uid => {
+          splits[uid] = parseFloat(customAmounts[uid] || '0');
+        });
+      }
+
+      const expenseData = {
+        title: expenseTitle.trim(),
+        amount: amount,
+        inputCurrency: inputCurrency,
+        inputAmount: parseFloat(expenseAmount),
+        splitMode: splitMode,
+        payers: selectedPayers,
+        participants: selectedParticipants,
+        splits: splits,
+        createdAt: Date.now(),
+        createdBy: auth.currentUser?.uid,
+      };
+
+      await addDoc(collection(db, "groups", groupId!, "expenses"), expenseData);
+      await updateDoc(doc(db, "groups", groupId!), {
+        totalExpenses: increment(amount)
+      });
+      setShowExpenseModal(false);
+      resetExpenseForm();
+      Alert.alert('Success', 'Expense added successfully!');
+    } catch (e) {
+      console.error('Save expense error:', e);
+      Alert.alert('Error', 'Failed to save expense');
+    }
   };
 
   useEffect(() => {
@@ -672,65 +754,424 @@ export default function GroupDetailScreen() {
         </ThemedView>
 
         <ThemedText type="subtitle" style={styles.sectionTitle}>Group Members</ThemedText>
+        
+        {/* Tab 切换栏 */}
+        <View style={styles.tabContainer}>
+          <Pressable 
+            style={[styles.tab, activeTab === 'owner' && styles.activeTab]}
+            onPress={() => setActiveTab('owner')}
+          >
+            <ThemedText style={[styles.tabText, activeTab === 'owner' && styles.activeTabText]}>
+              Owner
+            </ThemedText>
+          </Pressable>
+          <Pressable 
+            style={[styles.tab, activeTab === 'payer' && styles.activeTab]}
+            onPress={() => setActiveTab('payer')}
+          >
+            <ThemedText style={[styles.tabText, activeTab === 'payer' && styles.activeTabText]}>
+              Paid By
+            </ThemedText>
+          </Pressable>
+          <Pressable 
+            style={[styles.tab, activeTab === 'participant' && styles.activeTab]}
+            onPress={() => setActiveTab('participant')}
+          >
+            <ThemedText style={[styles.tabText, activeTab === 'participant' && styles.activeTabText]}>
+              Splitting
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        {/* 成员内容区域 */}
         <View style={styles.roleContainer}>
-          {/* Owner 区域 */}
-          <ThemedText style={styles.roleLabel}>👑 Owner</ThemedText>
-          <View style={styles.memberRow}>
-            {group.involvedFriends?.filter(f => f.uid === group.ownerId).map((f, i) => (
-              <View key={`owner-${f.uid}-${i}`} style={[styles.memberChip, styles.ownerChip]}>
-                <ThemedText style={styles.ownerText}>{f.displayName}</ThemedText>
+          {/* Owner Tab 内容 */}
+          {activeTab === 'owner' && (
+            <View style={styles.memberContent}>
+              <ThemedText style={styles.tabHint}>Group creator and organizer</ThemedText>
+              <View style={styles.memberRow}>
+                {group.involvedFriends?.filter(f => f.uid === group.ownerId).map((f, i) => (
+                  <View key={`owner-${f.uid}-${i}`} style={[styles.memberChip, styles.ownerChip]}>
+                    <View style={styles.memberAvatar}>
+                      <ThemedText style={styles.memberAvatarText}>{f.displayName[0].toUpperCase()}</ThemedText>
+                    </View>
+                    <ThemedText style={styles.ownerText}>{f.displayName}</ThemedText>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Paid By Tab 内容 */}
+          {activeTab === 'payer' && (
+            <View style={styles.memberContent}>
+              <ThemedText style={styles.tabHint}>People who paid for expenses</ThemedText>
+              <View style={styles.memberRow}>
+                {group.involvedFriends?.filter(f => group.payerIds?.includes(f.uid)).map((f, i) => (
+                  <Pressable 
+                    key={`payer-${f.uid}-${i}`} 
+                    style={[styles.memberChip, styles.payerChip]} 
+                    onPress={() => handleClaimAmount(f)}
+                  >
+                    <View style={[styles.memberAvatar, { backgroundColor: '#10b981' }]}>
+                      <ThemedText style={styles.memberAvatarText}>{f.displayName[0].toUpperCase()}</ThemedText>
+                    </View>
+                    <ThemedText style={styles.payerText}>{f.displayName}</ThemedText>
+                    {f.claimedAmount && (
+                      <View style={styles.amountBadge}>
+                        <ThemedText style={styles.amountBadgeText}>{f.claimedAmount}€</ThemedText>
+                      </View>
+                    )}
+                    <Pressable 
+                      onPress={(e) => { e.stopPropagation(); handleRemoveMember(f, 'payer'); }} 
+                      style={styles.deleteBtn}
+                    >
+                      <ThemedText style={{ color: '#10b981', fontSize: 14, fontWeight: '600' }}>×</ThemedText>
+                    </Pressable>
+                  </Pressable>
+                ))}
+                <Pressable 
+                  style={styles.addMemberChip} 
+                  onPress={() => { setActiveRole('payer'); setIsModalVisible(true); }}
+                >
+                  <ThemedText style={[styles.addMemberText, { color: '#10b981' }]}>+ Add Payer</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* Splitting With Tab 内容 */}
+          {activeTab === 'participant' && (
+            <View style={styles.memberContent}>
+              <ThemedText style={styles.tabHint}>People splitting the expenses</ThemedText>
+              <View style={styles.memberRow}>
+                {group.involvedFriends?.filter(f => group.participantIds?.includes(f.uid)).map((f, i) => (
+                  <Pressable 
+                    key={`part-${f.uid}-${i}`} 
+                    style={styles.memberChip} 
+                    onPress={() => handleClaimAmount(f)}
+                  >
+                    <View style={[styles.memberAvatar, { backgroundColor: '#2563eb' }]}>
+                      <ThemedText style={styles.memberAvatarText}>{f.displayName[0].toUpperCase()}</ThemedText>
+                    </View>
+                    <ThemedText style={styles.chipText}>{f.displayName}</ThemedText>
+                    {f.claimedAmount && (
+                      <View style={styles.amountBadge}>
+                        <ThemedText style={styles.amountBadgeText}>{f.claimedAmount}€</ThemedText>
+                      </View>
+                    )}
+                    <Pressable 
+                      onPress={(e) => { e.stopPropagation(); handleRemoveMember(f, 'participant'); }} 
+                      style={styles.deleteBtn}
+                    >
+                      <ThemedText style={{ color: '#2563eb', fontSize: 14, fontWeight: '600' }}>×</ThemedText>
+                    </Pressable>
+                  </Pressable>
+                ))}
+                <Pressable 
+                  style={styles.addMemberChip} 
+                  onPress={() => { setActiveRole('participant'); setIsModalVisible(true); }}
+                >
+                  <ThemedText style={[styles.addMemberText, { color: '#2563eb' }]}>+ Add Member</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Expense History */}
+        <ThemedText type="subtitle" style={{ fontSize: 16, fontWeight: '700', marginTop: 24, marginBottom: 12 }}>Expense History</ThemedText>
+        {expenses.length === 0 ? (
+          <ThemedText style={{ opacity: 0.6, textAlign: 'center', padding: 20 }}>No expenses yet</ThemedText>
+        ) : (
+          <View>
+            {expenses.map((item) => (
+              <View key={item.id} style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 12, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <ThemedText style={{ fontWeight: '600', fontSize: 14, color: '#1e293b' }}>{item.title}</ThemedText>
+                  <ThemedText style={{ fontWeight: 'bold', fontSize: 14, color: '#2563eb' }}>€{item.amount.toFixed(2)}</ThemedText>
+                </View>
+                <ThemedText style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Paid by: {item.payers?.map((payerId: string) => group.involvedFriends?.find(f => f.uid === payerId)?.displayName).filter(Boolean).join(', ') || 'Unknown'}</ThemedText>
+                <ThemedText style={{ fontSize: 12, color: '#64748b' }}>Split with: {item.participants?.map((participantId: string) => group.involvedFriends?.find(f => f.uid === participantId)?.displayName).filter(Boolean).join(', ') || 'Everyone'}</ThemedText>
               </View>
             ))}
           </View>
+        )}
 
-          {/* Payers 区域 */}
-          <ThemedText style={styles.roleLabel}>💳 Paid By</ThemedText>
-          <View style={styles.memberRow}>
-            {group.involvedFriends?.filter(f => group.payerIds?.includes(f.uid)).map((f, i) => (
-              <Pressable key={`payer-${f.uid}-${i}`} style={[styles.memberChip, styles.payerChip]} onPress={() => handleClaimAmount(f)}>
-                <ThemedText style={styles.payerText}>{f.displayName}</ThemedText>
-                {f.claimedAmount && <View style={styles.miniBadge}><ThemedText style={styles.miniBadgeText}>{f.claimedAmount}€</ThemedText></View>}
-                <Pressable onPress={(e) => { e.stopPropagation(); handleRemoveMember(f, 'payer'); }} style={styles.deleteBtn}>
-                  <Ionicons name="close-circle" size={16} color="#10b981" />
-                </Pressable>
-              </Pressable>
-            ))}
-            <Pressable style={styles.addMemberChip} onPress={() => { setActiveRole('payer'); setIsModalVisible(true); }}>
-              <Ionicons name="add" size={14} color="#6b7280" />
-            </Pressable>
-          </View>
-
-          {/* Participants 区域 */}
-          <ThemedText style={styles.roleLabel}>👥 Splitting With</ThemedText>
-          <View style={styles.memberRow}>
-            {group.involvedFriends?.filter(f => group.participantIds?.includes(f.uid)).map((f, i) => (
-              <Pressable key={`part-${f.uid}-${i}`} style={styles.memberChip} onPress={() => handleClaimAmount(f)}>
-                <ThemedText style={styles.chipText}>{f.displayName}</ThemedText>
-                {f.claimedAmount && <View style={styles.miniBadge}><ThemedText style={styles.miniBadgeText}>{f.claimedAmount}€</ThemedText></View>}
-                <Pressable onPress={(e) => { e.stopPropagation(); handleRemoveMember(f, 'participant'); }} style={styles.deleteBtn}>
-                  <Ionicons name="close-circle" size={16} color="#2563eb" />
-                </Pressable>
-              </Pressable>
-            ))}
-            <Pressable style={styles.addMemberChip} onPress={() => { setActiveRole('participant'); setIsModalVisible(true); }}>
-              <Ionicons name="add" size={14} color="#6b7280" />
-            </Pressable>
-          </View>
-        </View>
-
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Receipts</ThemedText>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {group.receiptUrls?.map((url, i) => <Image key={i} source={{ uri: url }} style={styles.receiptImage} />)}
-          <Pressable style={styles.addReceiptBtn} onPress={handleAddReceipt}>
-            <Ionicons name="add-circle-outline" size={32} color="#64748b" />
-          </Pressable>
-        </ScrollView>
+        {/* Add New Expense 按钮 */}
+        <Pressable style={styles.addExpenseBtn} onPress={openExpenseModal}>
+          <ThemedText style={styles.addExpenseBtnText}>+ Add New Expense</ThemedText>
+        </Pressable>
       </ScrollView>
+
+      {/* Add Expense Modal */}
+      <Modal visible={showExpenseModal} animationType="slide">
+        <AppScreen>
+          <View style={{ marginTop: 20 }}>
+            <AppTopBar title="Add Expense" showBack onBackPress={() => { setShowExpenseModal(false); resetExpenseForm(); }} />
+          </View>
+          <ScrollView style={{ padding: 16 }}>
+            {/* Expense Title */}
+            <ThemedText style={styles.expenseLabel}>Expense Name</ThemedText>
+            <TextInput
+              style={styles.expenseInput}
+              placeholder="e.g. Dinner, Transport..."
+              placeholderTextColor="#94a3b8"
+              value={expenseTitle}
+              onChangeText={setExpenseTitle}
+            />
+
+
+            {/* Total Amount - 多币种输入 */}
+            <ThemedText style={styles.expenseLabel}>Total Amount</ThemedText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <TextInput
+                style={[styles.expenseInput, { flex: 1 }]}
+                placeholder="0.00"
+                placeholderTextColor="#94a3b8"
+                keyboardType="decimal-pad"
+                value={expenseAmount}
+                onChangeText={async (val) => {
+                  setExpenseAmount(val);
+                  if (!val || isNaN(Number(val))) {
+                    setConvertedAmount('');
+                    return;
+                  }
+                  setIsConverting(true);
+                  const res = await convertAmount(Number(val), inputCurrency, defaultCurrency);
+                  setConvertedAmount(res !== null ? res.toFixed(2) : '');
+                  setIsConverting(false);
+                }}
+              />
+              <View style={{ width: 12 }} />
+              <View style={[styles.expenseInput, { flexDirection: 'row', alignItems: 'center', paddingVertical: 0, paddingHorizontal: 0, flex: undefined, width: Platform.OS === 'ios' ? 120 : 90, minWidth: 90, height: 48, marginBottom: 0 }]}> 
+                <Pressable
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', height: 48, paddingHorizontal: 12, justifyContent: 'space-between' }}
+                  onPress={() => setShowCurrencyModal(true)}
+                  accessibilityRole="button"
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <ThemedText style={{ fontWeight: 'bold', color: '#2563eb', fontSize: 15 }}>{currencySymbols[inputCurrency]} </ThemedText>
+                    <ThemedText style={{ fontWeight: 'bold', color: '#2563eb', fontSize: 15 }}>{inputCurrency}</ThemedText>
+                  </View>
+                  <Ionicons name="chevron-down" size={18} color="#2563eb" style={{ marginLeft: 6 }} />
+                </Pressable>
+                {/* 币种选择 Modal */}
+                <Modal
+                  visible={!!showCurrencyModal}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setShowCurrencyModal(false)}
+                >
+                  <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.2)' }} onPress={() => setShowCurrencyModal(false)} />
+                  <View style={{ position: 'absolute', top: '40%', left: '10%', right: '10%', backgroundColor: '#fff', borderRadius: 8, padding: 16, elevation: 8 }}>
+                    {supportedCurrencies.map((cur) => (
+                      <Pressable
+                        key={cur}
+                        style={{ paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}
+                        onPress={async () => {
+                          setInputCurrency(cur);
+                          setShowCurrencyModal(false);
+                          if (expenseAmount && !isNaN(Number(expenseAmount))) {
+                            setIsConverting(true);
+                            const res = await convertAmount(Number(expenseAmount), cur, defaultCurrency);
+                            setConvertedAmount(res !== null ? res.toFixed(2) : '');
+                            setIsConverting(false);
+                          } else {
+                            setConvertedAmount('');
+                          }
+                        }}
+                      >
+                        <ThemedText style={{ fontSize: 16, color: cur === inputCurrency ? '#2563eb' : '#1e293b', fontWeight: cur === inputCurrency ? 'bold' : 'normal' }}>
+                          {currencySymbols[cur]} {cur}
+                        </ThemedText>
+                        {cur === inputCurrency && <Ionicons name="checkmark" size={16} color="#2563eb" style={{ marginLeft: 8 }} />}
+                      </Pressable>
+                    ))}
+                  </View>
+                </Modal>
+              </View>
+            </View>
+            {/* 显示主币种金额 */}
+            <ThemedText style={{ color: '#2563eb', fontWeight: 'bold', marginBottom: 8 }}>
+              {isConverting ? 'Converting...' : (convertedAmount ? `≈ ${currencySymbols[defaultCurrency]}${convertedAmount} (${defaultCurrency})` : '')}
+            </ThemedText>
+
+            {/* Split Mode Selection */}
+            <ThemedText style={styles.expenseLabel}>Split Mode</ThemedText>
+            <View style={styles.splitModeContainer}>
+              <Pressable
+                style={[styles.splitModeBtn, splitMode === 'equal' && styles.splitModeBtnActive]}
+                onPress={() => setSplitMode('equal')}
+              >
+                <ThemedText style={[styles.splitModeText, splitMode === 'equal' && styles.splitModeTextActive]}>Equal</ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.splitModeBtn, splitMode === 'ratio' && styles.splitModeBtnActive]}
+                onPress={() => setSplitMode('ratio')}
+              >
+                <ThemedText style={[styles.splitModeText, splitMode === 'ratio' && styles.splitModeTextActive]}>Ratio</ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.splitModeBtn, splitMode === 'custom' && styles.splitModeBtnActive]}
+                onPress={() => setSplitMode('custom')}
+              >
+                <ThemedText style={[styles.splitModeText, splitMode === 'custom' && styles.splitModeTextActive]}>Custom</ThemedText>
+              </Pressable>
+            </View>
+
+            {/* Payers Selection */}
+            <ThemedText style={styles.expenseLabel}>Who Paid?</ThemedText>
+            <View style={styles.participantGrid}>
+              {group.involvedFriends?.map((f) => (
+                <Pressable
+                  key={`payer-select-${f.uid}`}
+                  style={[
+                    styles.participantChip,
+                    selectedPayers.includes(f.uid) && styles.participantChipActive
+                  ]}
+                  onPress={() => {
+                    setSelectedPayers(prev =>
+                      prev.includes(f.uid)
+                        ? prev.filter(id => id !== f.uid)
+                        : [...prev, f.uid]
+                    );
+                  }}
+                >
+                  <ThemedText style={[
+                    styles.participantChipText,
+                    selectedPayers.includes(f.uid) && styles.participantChipTextActive
+                  ]}>{f.displayName}</ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Participants Selection */}
+            <ThemedText style={styles.expenseLabel}>Split With</ThemedText>
+            <View style={styles.participantGrid}>
+              {group.involvedFriends?.map((f) => (
+                <Pressable
+                  key={`participant-select-${f.uid}`}
+                  style={[
+                    styles.participantChip,
+                    selectedParticipants.includes(f.uid) && styles.participantChipActive
+                  ]}
+                  onPress={() => {
+                    setSelectedParticipants(prev =>
+                      prev.includes(f.uid)
+                        ? prev.filter(id => id !== f.uid)
+                        : [...prev, f.uid]
+                    );
+                  }}
+                >
+                  <ThemedText style={[
+                    styles.participantChipText,
+                    selectedParticipants.includes(f.uid) && styles.participantChipTextActive
+                  ]}>{f.displayName}</ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Ratio Input (only shown in ratio mode) */}
+            {splitMode === 'ratio' && (
+              <View style={styles.splitDetailsContainer}>
+                <ThemedText style={styles.expenseLabel}>Set Ratios</ThemedText>
+                {selectedParticipants.map(uid => {
+                  const person = group.involvedFriends?.find(f => f.uid === uid);
+                  return (
+                    <View key={`ratio-${uid}`} style={styles.splitRow}>
+                      <ThemedText style={styles.splitRowName}>{person?.displayName || 'Unknown'}</ThemedText>
+                      <TextInput
+                        style={styles.splitInput}
+                        placeholder="1"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="decimal-pad"
+                        value={ratios[uid] || ''}
+                        onChangeText={(v) => setRatios(prev => ({ ...prev, [uid]: v }))}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Custom Amount Input (only shown in custom mode) */}
+            {splitMode === 'custom' && (
+              <View style={styles.splitDetailsContainer}>
+                <ThemedText style={styles.expenseLabel}>Set Amounts (€)</ThemedText>
+                {selectedParticipants.map(uid => {
+                  const person = group.involvedFriends?.find(f => f.uid === uid);
+                  return (
+                    <View key={`custom-${uid}`} style={styles.splitRow}>
+                      <ThemedText style={styles.splitRowName}>{person?.displayName || 'Unknown'}</ThemedText>
+                      <TextInput
+                        style={styles.splitInput}
+                        placeholder="0.00"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="decimal-pad"
+                        value={customAmounts[uid] || ''}
+                        onChangeText={(v) => setCustomAmounts(prev => ({ ...prev, [uid]: v }))}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Preview */}
+            {splitMode === 'equal' && selectedParticipants.length > 0 && expenseAmount && (
+              <View style={styles.previewContainer}>
+                <ThemedText style={styles.previewTitle}>Preview (Equal Split)</ThemedText>
+                <ThemedText style={styles.previewText}>
+                  Each person pays: €{(parseFloat(expenseAmount) / selectedParticipants.length).toFixed(2)}
+                </ThemedText>
+              </View>
+            )}
+
+            {/* Receipts 部分 */}
+            <ThemedText style={styles.expenseLabel}>Receipts (Optional)</ThemedText>
+            <ThemedText style={{ fontSize: 12, color: '#ffffff', marginBottom: 8 }}>{receipts.length} receipt(s) selected</ThemedText>
+            
+            {receipts.length > 0 && (
+              <View style={styles.receiptsGrid}>
+                {receipts.map((uri, index) => (
+                  <View key={index} style={styles.receiptThumbnail}>
+                    <Image source={{ uri }} style={styles.receiptImage} />
+                    <Pressable
+                      style={styles.removeReceiptBtn}
+                      onPress={() => setReceipts((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <Pressable
+              onPress={pickReceipt}
+              hitSlop={15}
+              style={styles.addReceiptBtn}
+            >
+              <PixelIcon name="add" size={20} color="#2563eb" />
+              <ThemedText style={{ color: '#2563eb', marginLeft: 8, fontWeight: '600', flex: 1 }}>Add Receipt</ThemedText>
+              {receipts.length > 0 && <ThemedText style={{ color: '#2563eb', fontWeight: 'bold' }}>{receipts.length}</ThemedText>}
+            </Pressable>
+
+            {/* Save Button */}
+            <Pressable style={styles.saveExpenseBtn} onPress={handleSaveExpense}>
+              <ThemedText style={styles.saveExpenseBtnText}>Save Expense</ThemedText>
+            </Pressable>
+          </ScrollView>
+        </AppScreen>
+      </Modal>
 
       {/* 好友选择 Modal */}
       <Modal visible={isModalVisible} animationType="slide">
         <AppScreen>
-          <AppTopBar title={t('step4Title')} showBack onBackPress={() => setIsModalVisible(false)} />
+          <View style={{ marginTop: 20 }}>
+            <AppTopBar title={t('step4Title')} showBack onBackPress={() => setIsModalVisible(false)} />
+          </View>
           <ScrollView style={{ padding: 16 }}>
             {/* “我”的选项 - 增加了显眼的样式 */}
             {auth.currentUser && (
@@ -767,48 +1208,136 @@ export default function GroupDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerCard: { padding: 20, borderRadius: 16, backgroundColor: '#2563eb', alignItems: 'center', marginVertical: 10 },
-  idBadge: { backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
+  headerCard: { padding: 20, borderRadius: 0, backgroundColor: '#2563eb', alignItems: 'center', marginVertical: 10, borderWidth: 3, borderColor: '#1e40af' },
+  idBadge: { backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 0, marginBottom: 12 },
   idBadgeText: { color: '#fff', fontSize: 10, fontFamily: 'monospace' },
   dateText: { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
-  totalAmount: { color: '#fff', fontSize: 36, fontWeight: '800', marginTop: 8 },
+  totalAmount: { color: '#fff', fontSize: 26, fontWeight: '800', marginTop: 8 },
   totalLabel: { color: '#fff', opacity: 0.8, fontSize: 14 },
   sectionTitle: { marginTop: 24, marginBottom: 12 },
-  roleContainer: { backgroundColor: '#fff', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#f1f5f9' },
-  roleLabel: { fontSize: 11, color: '#94a3b8', fontWeight: 'bold', marginTop: 12, textTransform: 'uppercase' },
-  memberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  memberChip: { flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingRight: 6, paddingVertical: 4, borderRadius: 20, backgroundColor: '#f0f7ff', borderWidth: 1, borderColor: '#2563eb', marginBottom: 4 },
-  ownerChip: { backgroundColor: '#fffbeb', borderColor: '#f59e0b', paddingRight: 10 },
+  
+  // Tab 样式 - 像素风
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 0,
+    padding: 4,
+    marginBottom: 0,
+    borderWidth: 2,
+    borderColor: '#60a5fa',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 0,
+  },
+  activeTab: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#2563eb',
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  activeTabText: {
+    color: '#1e293b',
+  },
+  
+  // 成员区域 - 像素风
+  roleContainer: { 
+    backgroundColor: '#fff', 
+    borderRadius: 0,
+    padding: 16, 
+    borderWidth: 2, 
+    borderTopWidth: 0,
+    borderColor: '#60a5fa' 
+  },
+  memberContent: {
+    minHeight: 80,
+  },
+  tabHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 12,
+  },
+  memberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  memberChip: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingLeft: 4, 
+    paddingRight: 8, 
+    paddingVertical: 6, 
+    borderRadius: 0, 
+    backgroundColor: '#f0f7ff', 
+    borderWidth: 2, 
+    borderColor: '#2563eb',
+  },
+  ownerChip: { backgroundColor: '#fffbeb', borderColor: '#f59e0b' },
   payerChip: { backgroundColor: '#f0fdf4', borderColor: '#10b981' },
-  ownerText: { color: '#b45309', fontSize: 12, fontWeight: '600' },
-  payerText: { color: '#15803d', fontSize: 12, fontWeight: '600' },
-  chipText: { fontSize: 12, color: '#2563eb' },
-  miniBadge: { backgroundColor: '#4CAF50', marginLeft: 6, paddingHorizontal: 5, borderRadius: 6 },
-  miniBadgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
-  deleteBtn: { marginLeft: 6, padding: 2 },
-  addMemberChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderStyle: 'dashed', borderWidth: 1, borderColor: '#d1d5db' },
-  receiptImage: { width: 120, height: 160, borderRadius: 12, marginRight: 12 },
-  addReceiptBtn: { width: 120, height: 160, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: '#cbd5e1', justifyContent: 'center', alignItems: 'center' },
+  memberAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 0,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  memberAvatarText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  ownerText: { color: '#b45309', fontSize: 13, fontWeight: '600' },
+  payerText: { color: '#15803d', fontSize: 13, fontWeight: '600' },
+  chipText: { fontSize: 13, color: '#2563eb', fontWeight: '500' },
+  amountBadge: { 
+    backgroundColor: '#22c55e', 
+    marginLeft: 6, 
+    paddingHorizontal: 6, 
+    paddingVertical: 2,
+    borderRadius: 0 
+  },
+  amountBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  deleteBtn: { marginLeft: 4, padding: 2 },
+  addMemberChip: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 0, 
+    borderStyle: 'dashed', 
+    borderWidth: 2, 
+    borderColor: '#d1d5db',
+    gap: 4,
+  },
+  addMemberText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  
   friendSelectItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 0,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
   },
-  // 💡 补全这部分：
   meItem: {
     borderColor: '#2563eb',
     backgroundColor: '#f0f7ff',
-    borderWidth: 1.5,
+    borderWidth: 2,
   },
   miniAvatar: { 
     width: 24, 
     height: 24, 
-    borderRadius: 12, 
+    borderRadius: 0, 
     backgroundColor: '#2563eb', 
     alignItems: 'center', 
     justifyContent: 'center' 
@@ -817,5 +1346,191 @@ const styles = StyleSheet.create({
     color: '#fff', 
     fontSize: 10, 
     fontWeight: 'bold' 
+  },
+  
+  // Add Expense 样式 - 像素风
+  addExpenseBtn: {
+    backgroundColor: '#2563eb',
+    borderWidth: 3,
+    borderColor: '#1e40af',
+    borderRadius: 0,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 20,
+  },
+  addExpenseBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  expenseLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  expenseInput: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#60a5fa',
+    borderRadius: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  splitModeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  splitModeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 0,
+  },
+  splitModeBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#1e40af',
+  },
+  splitModeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  splitModeTextActive: {
+    color: '#fff',
+  },
+  participantGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  participantChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 0,
+  },
+  participantChipActive: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#2563eb',
+  },
+  participantChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  participantChipTextActive: {
+    color: '#1e40af',
+  },
+  splitDetailsContainer: {
+    marginTop: 8,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderRadius: 0,
+  },
+  splitRowName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#374151',
+  },
+  splitInput: {
+    width: 80,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#60a5fa',
+    borderRadius: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#1e293b',
+  },
+  previewContainer: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 2,
+    borderColor: '#22c55e',
+    borderRadius: 0,
+    padding: 16,
+    marginTop: 16,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#15803d',
+    marginBottom: 8,
+  },
+  previewText: {
+    fontSize: 16,
+    color: '#166534',
+  },
+  receiptsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  receiptThumbnail: {
+    width: '30%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    position: 'relative',
+  },
+  receiptImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  removeReceiptBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+  },
+  addReceiptBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    borderStyle: 'solid',
+    backgroundColor: '#ffffff',
+  },
+  saveExpenseBtn: {
+    backgroundColor: '#22c55e',
+    borderWidth: 3,
+    borderColor: '#15803d',
+    borderRadius: 0,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+  },
+  saveExpenseBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

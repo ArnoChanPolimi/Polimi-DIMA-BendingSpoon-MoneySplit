@@ -38,8 +38,8 @@ export const uploadImageAndGetUrl = async (uri: string | null, userId: string) =
     const blob = await response.blob();
 
     // B. 创建存储引用 (定义云端的文件路径和名称)
-    // 路径格式：receipts/用户ID/时间戳.jpg
-    const storageRef = ref(storage, `receipts/${userId}/${Date.now()}.jpg`);
+    // 路径格式：attachments/用户ID/时间戳.jpg
+    const storageRef = ref(storage, `attachments/${userId}/${Date.now()}.jpg`);
 
     // C. 执行上传
     await uploadBytes(storageRef, blob);

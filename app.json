@@ -45,8 +45,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow aa-split-app to access your photos to upload receipts.",
-          "cameraPermission": "Allow aa-split-app to access your camera to scan receipts."
+          "photosPermission": "Allow aa-split-app to access your photos to upload attachments.",
+          "cameraPermission": "Allow aa-split-app to access your camera to scan attachments."
         }
       ],
       "expo-font",
