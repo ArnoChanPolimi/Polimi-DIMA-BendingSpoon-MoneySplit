@@ -414,7 +414,7 @@
 
 // app\group\[groupId]\index.tsx
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
-import { auth, db } from '@/services/firebase';
+import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -462,6 +462,7 @@ type ExpenseItem = {
   splitMode?: 'equal' | 'ratio' | 'custom';
   splits?: { [uid: string]: number };
   currency?: string;
+  receiptUrls?: string[];
 };
 
 // 默认头像库映射
@@ -575,6 +576,13 @@ export default function GroupDetailScreen() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
+  
+  // 新增：收据大图查看状态
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
+  
+  // 新增：编辑模式下的收据状态
+  const [editedReceipts, setEditedReceipts] = useState<string[]>([]);
 
   // --- 1. 删除成员逻辑 (修正版) ---
   const handleRemoveMember = async (person: InvolvedFriend, role: 'payer' | 'participant') => {
@@ -872,6 +880,7 @@ export default function GroupDetailScreen() {
         splits: splits,
         createdAt: Date.now(),
         createdBy: auth.currentUser?.uid,
+        receiptUrls: receipts, // 保存收据图片
       };
 
       await addDoc(collection(db, "groups", groupId!, "expenses"), expenseData);
@@ -964,6 +973,7 @@ export default function GroupDetailScreen() {
         splits: splits,
         currency: editedCurrency,
         splitMode: editedSplitMode,
+        receiptUrls: editedReceipts,
       });
 
       // Calculate amount difference for group totalExpenses update
@@ -1585,6 +1595,8 @@ export default function GroupDetailScreen() {
                     });
                     setEditedRatios(ratios);
                     setEditedCustomAmounts(customAmounts);
+                    // 初始化 receipts
+                    setEditedReceipts(selectedExpense.receiptUrls || []);
                   }
                 }
               }}
@@ -1833,7 +1845,147 @@ export default function GroupDetailScreen() {
                   </>
                 )}
               </ThemedView>
+
+              {/* Receipts Section */}
+              {isEditingExpense ? (
+                /* Edit Mode Receipts */
+                <ThemedView style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 16, marginTop: 16 }}>
+                  <ThemedText style={{ fontSize: 12, opacity: 0.6, marginBottom: 12, fontWeight: '600', textTransform: 'uppercase' }}>Receipts ({editedReceipts.length})</ThemedText>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {editedReceipts.map((url, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          width: '30%',
+                          aspectRatio: 1,
+                          borderRadius: 0,
+                          overflow: 'hidden',
+                          borderWidth: 2,
+                          borderColor: '#e2e8f0',
+                        }}
+                      >
+                        <Pressable
+                          onPress={() => {
+                            setViewingReceiptUrl(url);
+                            setShowReceiptViewer(true);
+                          }}
+                          style={{ width: '100%', height: '100%' }}
+                        >
+                          <Image source={{ uri: url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                        </Pressable>
+                        {/* Delete Button */}
+                        <Pressable
+                          onPress={() => {
+                            setEditedReceipts(prev => prev.filter((_, i) => i !== index));
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                            borderRadius: 0,
+                            padding: 4,
+                          }}
+                        >
+                          <Ionicons name="trash" size={14} color="#fff" />
+                        </Pressable>
+                      </View>
+                    ))}
+                    {/* Add Receipt Button */}
+                    <Pressable
+                      onPress={async () => {
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                          allowsEditing: true,
+                          quality: 0.7,
+                        });
+                        if (!result.canceled && result.assets[0]) {
+                          const imageUri = result.assets[0].uri;
+                          const uploadedUrl = await uploadImageAndGetUrl(imageUri, auth.currentUser?.uid || 'unknown');
+                          if (uploadedUrl) {
+                            setEditedReceipts(prev => [...prev, uploadedUrl]);
+                          }
+                        }
+                      }}
+                      style={{
+                        width: '30%',
+                        aspectRatio: 1,
+                        borderRadius: 0,
+                        borderWidth: 2,
+                        borderColor: '#2563eb',
+                        borderStyle: 'dashed',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        backgroundColor: '#f0f7ff',
+                      }}
+                    >
+                      <Ionicons name="add" size={28} color="#2563eb" />
+                      <ThemedText style={{ fontSize: 10, color: '#2563eb', marginTop: 4 }}>Add</ThemedText>
+                    </Pressable>
+                  </View>
+                </ThemedView>
+              ) : (
+                /* View Mode Receipts */
+                selectedExpense.receiptUrls && selectedExpense.receiptUrls.length > 0 && (
+                  <ThemedView style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 16, marginTop: 16 }}>
+                    <ThemedText style={{ fontSize: 12, opacity: 0.6, marginBottom: 12, fontWeight: '600', textTransform: 'uppercase' }}>Receipts ({selectedExpense.receiptUrls.length})</ThemedText>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                      {selectedExpense.receiptUrls.map((url, index) => (
+                        <Pressable
+                          key={index}
+                          onPress={() => {
+                            setViewingReceiptUrl(url);
+                            setShowReceiptViewer(true);
+                          }}
+                          style={{
+                            width: '30%',
+                            aspectRatio: 1,
+                            borderRadius: 0,
+                            overflow: 'hidden',
+                            borderWidth: 2,
+                            borderColor: '#e2e8f0',
+                          }}
+                        >
+                          <Image source={{ uri: url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                          <View style={{ position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(37, 99, 235, 0.9)', borderRadius: 0, padding: 4 }}>
+                            <Ionicons name="expand" size={12} color="#fff" />
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ThemedView>
+                )
+              )}
             </ScrollView>
+          )}
+          
+          {/* Receipt Fullscreen Viewer - 内部弹窗 */}
+          {showReceiptViewer && viewingReceiptUrl && (
+            <Pressable 
+              onPress={() => setShowReceiptViewer(false)}
+              style={{ 
+                position: 'absolute', 
+                top: 0, 
+                left: 0, 
+                right: 0, 
+                bottom: 0, 
+                backgroundColor: 'rgba(0,0,0,0.95)', 
+                justifyContent: 'center', 
+                alignItems: 'center',
+                zIndex: 999
+              }}
+            >
+              <Pressable
+                onPress={() => setShowReceiptViewer(false)}
+                style={{ position: 'absolute', top: 50, right: 20, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 8 }}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </Pressable>
+              <Image
+                source={{ uri: viewingReceiptUrl }}
+                style={{ width: '90%', height: '80%', resizeMode: 'contain' }}
+              />
+            </Pressable>
           )}
         </AppScreen>
       </Modal>
