@@ -414,8 +414,9 @@
 
 // app\group\[groupId]\index.tsx
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
-import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, doc, increment, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
@@ -425,11 +426,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
+import { PixelIcon } from '@/components/ui/PixelIcon';
 import { useCurrency } from '@/core/currency/CurrencyContext';
 import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
 // import { Picker } from '@react-native-picker/picker';
-import * as ImagePicker from 'expo-image-picker';
 
 type InvolvedFriend = {
   uid: string;
@@ -456,6 +457,7 @@ type ExpenseItem = {
   amount: number;
   createdAt: number;
   participants: string[];
+  payers: string[];
 };
 
 export default function GroupDetailScreen() {
@@ -487,6 +489,9 @@ export default function GroupDetailScreen() {
   const [customAmounts, setCustomAmounts] = useState<{ [uid: string]: string }>({});
   // 币种选择 Modal 状态
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  
+  // 新增：Receipts 相关状态
+  const [receipts, setReceipts] = useState<string[]>([]);
 
   // --- 1. 删除成员逻辑 (修正版) ---
   const handleRemoveMember = async (person: InvolvedFriend, role: 'payer' | 'participant') => {
@@ -601,14 +606,37 @@ export default function GroupDetailScreen() {
   const resetExpenseForm = () => {
     setExpenseTitle('');
     setExpenseAmount('');
-    setInputCurrency(defaultCurrency);
     setConvertedAmount('');
+    setInputCurrency(defaultCurrency);
     setIsConverting(false);
     setSplitMode('equal');
     setSelectedPayers([]);
     setSelectedParticipants([]);
     setRatios({});
     setCustomAmounts({});
+    setReceipts([]);
+  };
+
+  // 选择收据图片
+  const pickReceipt = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need camera roll permissions to upload receipts.');
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.5,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newUri = result.assets[0].uri;
+        setReceipts((prev) => [...prev, newUri]);
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to pick receipt image');
+    }
   };
 
   // --- 6. 打开 Expense Modal ---
@@ -851,8 +879,24 @@ export default function GroupDetailScreen() {
           )}
         </View>
 
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Receipts</ThemedText>
-
+        {/* Expense History */}
+        <ThemedText type="subtitle" style={{ fontSize: 16, fontWeight: '700', marginTop: 24, marginBottom: 12 }}>Expense History</ThemedText>
+        {expenses.length === 0 ? (
+          <ThemedText style={{ opacity: 0.6, textAlign: 'center', padding: 20 }}>No expenses yet</ThemedText>
+        ) : (
+          <View>
+            {expenses.map((item) => (
+              <View key={item.id} style={{ backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#2563eb', padding: 12, marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <ThemedText style={{ fontWeight: '600', fontSize: 14, color: '#1e293b' }}>{item.title}</ThemedText>
+                  <ThemedText style={{ fontWeight: 'bold', fontSize: 14, color: '#2563eb' }}>€{item.amount.toFixed(2)}</ThemedText>
+                </View>
+                <ThemedText style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Paid by: {item.payers?.map((payerId: string) => group.involvedFriends?.find(f => f.uid === payerId)?.displayName).filter(Boolean).join(', ') || 'Unknown'}</ThemedText>
+                <ThemedText style={{ fontSize: 12, color: '#64748b' }}>Split with: {item.participants?.map((participantId: string) => group.involvedFriends?.find(f => f.uid === participantId)?.displayName).filter(Boolean).join(', ') || 'Everyone'}</ThemedText>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Add New Expense 按钮 */}
         <Pressable style={styles.addExpenseBtn} onPress={openExpenseModal}>
@@ -1084,6 +1128,36 @@ export default function GroupDetailScreen() {
               </View>
             )}
 
+            {/* Receipts 部分 */}
+            <ThemedText style={styles.expenseLabel}>Receipts (Optional)</ThemedText>
+            <ThemedText style={{ fontSize: 12, color: '#ffffff', marginBottom: 8 }}>{receipts.length} receipt(s) selected</ThemedText>
+            
+            {receipts.length > 0 && (
+              <View style={styles.receiptsGrid}>
+                {receipts.map((uri, index) => (
+                  <View key={index} style={styles.receiptThumbnail}>
+                    <Image source={{ uri }} style={styles.receiptImage} />
+                    <Pressable
+                      style={styles.removeReceiptBtn}
+                      onPress={() => setReceipts((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <Pressable
+              onPress={pickReceipt}
+              hitSlop={15}
+              style={styles.addReceiptBtn}
+            >
+              <PixelIcon name="add" size={20} color="#2563eb" />
+              <ThemedText style={{ color: '#2563eb', marginLeft: 8, fontWeight: '600', flex: 1 }}>Add Receipt</ThemedText>
+              {receipts.length > 0 && <ThemedText style={{ color: '#2563eb', fontWeight: 'bold' }}>{receipts.length}</ThemedText>}
+            </Pressable>
+
             {/* Save Button */}
             <Pressable style={styles.saveExpenseBtn} onPress={handleSaveExpense}>
               <ThemedText style={styles.saveExpenseBtnText}>Save Expense</ThemedText>
@@ -1245,8 +1319,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  receiptImage: { width: 120, height: 160, borderRadius: 0, marginRight: 12, borderWidth: 2, borderColor: '#60a5fa' },
-  addReceiptBtn: { width: 120, height: 160, borderRadius: 0, borderStyle: 'dashed', borderWidth: 2, borderColor: '#cbd5e1', justifyContent: 'center', alignItems: 'center' },
   friendSelectItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1295,7 +1367,7 @@ const styles = StyleSheet.create({
   expenseLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: '#ffffff',
     marginTop: 16,
     marginBottom: 8,
   },
@@ -1407,6 +1479,44 @@ const styles = StyleSheet.create({
   previewText: {
     fontSize: 16,
     color: '#166534',
+  },
+  receiptsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  receiptThumbnail: {
+    width: '30%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    position: 'relative',
+  },
+  receiptImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  removeReceiptBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+  },
+  addReceiptBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    borderStyle: 'solid',
+    backgroundColor: '#ffffff',
   },
   saveExpenseBtn: {
     backgroundColor: '#22c55e',

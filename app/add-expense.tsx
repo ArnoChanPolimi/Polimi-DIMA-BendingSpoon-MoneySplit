@@ -12,37 +12,12 @@ import { t } from "@/core/i18n";
 import { useSettings } from "@/core/settings/SettingsContext";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { Currency } from "@/services/exchangeRateApi";
-import { auth, uploadImageAndGetUrl, db } from "@/services/firebase";
+import { auth, db, uploadImageAndGetUrl } from "@/services/firebase";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { collection, addDoc } from "firebase/firestore";
-
-  // 新增：小票图片本地预览和上传
-  const [attachmentImage, setAttachmentImage] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-
-  // 选择图片并本地预览
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      alert("We need camera roll permissions to upload attachments.");
-      return;
-    }
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.5,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAttachmentImage(result.assets[0].uri);
-      }
-    } catch (e) {
-      alert("Failed to pick image");
-    }
-  };
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { addDoc, collection } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
     Image,
     KeyboardAvoidingView,
@@ -89,8 +64,71 @@ export default function AddExpenseScreen() {
   const [attachmentImage, setAttachmentImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  // 新增：Receipts（收据）相关
+  const [receipts, setReceipts] = useState<string[]>([]);
 
   const themedTextColor = useThemeColor({}, "text");
+
+  // 选择图片并本地预览
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      alert("We need camera roll permissions to upload attachments.");
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.5,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setAttachmentImage(result.assets[0].uri);
+      }
+    } catch (e) {
+      alert("Failed to pick image");
+    }
+  };
+
+  // 处理刷新
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
+
+  // 选择收据图片
+  const pickReceipt = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      alert("We need camera roll permissions to upload receipts.");
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.5,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newUri = result.assets[0].uri;
+        setReceipts((prev) => [...prev, newUri]);
+      }
+    } catch (e) {
+      alert("Failed to pick receipt image");
+    }
+  };
+
+  // 切换参与者
+  const toggleParticipant = (uid: string) => {
+    setParticipantIds((prev) => {
+      if (prev.includes(uid)) {
+        return prev.filter((id) => id !== uid);
+      } else {
+        return [...prev, uid];
+      }
+    });
+  };
+
   useEffect(() => {
     // ...existing code for loading friends from db...
   }, []);
@@ -167,21 +205,18 @@ export default function AddExpenseScreen() {
               onChangeText={setNotes}
             />
           </View>
-          
-          <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">4 · {t("attachments")}</ThemedText>
+
+          {/* ========== 4. RECEIPTS 部分 ========== */}
+          <View style={{ marginTop: 20, backgroundColor: '#f0f7ff', padding: 12, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#2563eb' }}>
+            <ThemedText type="subtitle" style={{ color: '#1e40af', marginBottom: 8 }}>📋 {t("attachments")} & Receipts</ThemedText>
             
+            {/* Attachments */}
+            <ThemedText style={{ fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6 }}>📎 Attachment (Optional)</ThemedText>
             <Pressable 
-              onPress={() => {
-                // console.log("Upload area pressed!"); 
-                alert("Triggered!");
-                pickImage();
-              }}
-              // FIX 1: 增加 hitSlop，扩大点击判定范围，防止边缘点不到
+              onPress={pickImage}
               hitSlop={20} 
               style={({ pressed }) => [
                 styles.uploadArea,
-                // FIX 2: 增加背景色反馈，让你肉眼能确认到底点中没
                 { backgroundColor: pressed ? '#f3f4f6' : '#f9fafb', opacity: pressed ? 0.7 : 1 }, 
                 attachmentImage ? { padding: 0 } : null
               ]}
@@ -189,12 +224,44 @@ export default function AddExpenseScreen() {
               {attachmentImage ? (
                 <Image source={{ uri: attachmentImage }} style={styles.previewImage} />
               ) : (
-                /* FIX 3: 彻底删掉 pointerEvents: 'none'，让它变回正常的 View */
                 <View style={{ alignItems: 'center' }}> 
                   <Ionicons name="cloud-upload-outline" size={28} color={useThemeColor({}, "placeholder")}/>
                   <ThemedText style={{ color: useThemeColor({}, "placeholder"), marginTop: 4 }}>{t("attachments")}</ThemedText>
                 </View>
               )}
+            </Pressable>
+
+            {/* Receipts */}
+            <ThemedText style={{ fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6 }}>🧾 Receipts</ThemedText>
+            <ThemedText style={{ fontSize: 11, opacity: 0.6, marginBottom: 8 }}>📤 Upload {receipts.length} receipt(s)</ThemedText>
+            
+            {receipts.length > 0 && (
+              <View style={styles.receiptsGrid}>
+                {receipts.map((uri, index) => (
+                  <View key={index} style={styles.receiptThumbnail}>
+                    <Image source={{ uri }} style={styles.receiptImage} />
+                    <Pressable
+                      style={styles.removeReceiptBtn}
+                      onPress={() => setReceipts((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            <Pressable
+              onPress={pickReceipt}
+              hitSlop={15}
+              style={({ pressed }) => [
+                styles.addReceiptBtn,
+                { backgroundColor: pressed ? '#dbeafe' : '#eff6ff' }
+              ]}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#2563eb" />
+              <ThemedText style={{ color: '#2563eb', marginLeft: 8, fontWeight: '600', flex: 1 }}>Add Receipt</ThemedText>
+              {receipts.length > 0 && <ThemedText style={{ color: '#2563eb', fontWeight: 'bold' }}>{receipts.length}</ThemedText>}
             </Pressable>
           </View>
 
@@ -213,6 +280,21 @@ export default function AddExpenseScreen() {
                   return;
                 }
               }
+              // 保存收据图片
+              let receiptUrls: string[] = [];
+              if (receipts.length > 0) {
+                try {
+                  for (const receiptUri of receipts) {
+                    const url = await uploadImageAndGetUrl(receiptUri, auth.currentUser?.uid || "anonymous");
+                    receiptUrls.push(url);
+                  }
+                } catch (e) {
+                  alert("Receipt upload failed");
+                  setUploading(false);
+                  return;
+                }
+              }
+              
               // 保存账单到 Firestore（示例，需根据实际表结构调整）
               try {
                 await addDoc(collection(db, "expenses"), {
@@ -220,11 +302,12 @@ export default function AddExpenseScreen() {
                   title,
                   totalAmount,
                   notes,
-                  currency: selectedCurrency.code,
+                  currency: selectedCurrency,
                   participantIds,
                   createdBy: auth.currentUser?.uid,
                   createdAt: Date.now(),
                   attachmentUrl: attachmentUrl || null,
+                  receiptUrls: receiptUrls.length > 0 ? receiptUrls : null,
                 });
                 setUploading(false);
                 alert(t("addSuccess") || "Expense added!");
@@ -233,6 +316,7 @@ export default function AddExpenseScreen() {
                 setTotalAmount("");
                 setNotes("");
                 setAttachmentImage(null);
+                setReceipts([]);
                 // router.back();
               } catch (e) {
                 setUploading(false);
@@ -285,159 +369,6 @@ export default function AddExpenseScreen() {
     </AppScreen>
   );
 
-  // 刷新表单
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTitle('');
-    setTotalAmount('');
-    setNotes('');
-    setParticipantIds(auth.currentUser?.uid ? [auth.currentUser.uid] : []);
-    setTimeout(() => setIsRefreshing(false), 300);
-  };
-
-  return (
-    <AppScreen>
-      <AppTopBar 
-        title={t("newExpense")} 
-        showBack 
-        showRefresh={true}
-        onRefreshPress={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subtitle">{t("step1Title")}</ThemedText>
-          <TextInput
-            style={styles.input}
-            placeholder={t("expenseNamePlaceholder")}
-            value={title}
-            onChangeText={setTitle}
-          />
-
-          {/* Move split mode section up, reduce margin */}
-          <View style={{ marginTop: 8 }}>
-            <ParticipantSection 
-              selectedFriends={friends.filter((f) => 
-                participantIds.map(id => id.trim()).includes(f.uid.trim())
-              )} 
-              participantIds={participantIds}
-              onToggle={toggleParticipant}
-              onAddPress={() => setShowAddPeople(true)}
-            />
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">{t("step2Title")}</ThemedText>
-            <TextInput
-              style={styles.input}
-              keyboardType="numeric"
-              placeholder={t("amountPlaceholder")}
-              value={totalAmount}
-              onChangeText={setTotalAmount}
-            />
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            <CurrencySelector
-              selectedCurrency={selectedCurrency}
-              onSelectCurrency={setSelectedCurrency}
-              label={t("recordCurrency")}
-            />
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">{t("notesOptionalTitle")}</ThemedText>
-            <TextInput
-              style={[styles.input, { height: 100, textAlignVertical: "top" }]}
-              multiline
-              placeholder={t("notesPlaceholder")}
-              value={notes}
-              onChangeText={setNotes}
-            />
-          </View>
-          
-          <View style={{ marginTop: 20 }}>
-            <ThemedText type="subtitle">4 · {t("receipts")}</ThemedText>
-            
-            <Pressable 
-              onPress={() => {
-                // console.log("Upload area pressed!"); 
-                alert("Triggered!");
-                pickImage();
-              }}
-              // FIX 1: 增加 hitSlop，扩大点击判定范围，防止边缘点不到
-              hitSlop={20} 
-              style={({ pressed }) => [
-                styles.uploadArea,
-                // FIX 2: 增加背景色反馈，让你肉眼能确认到底点中没
-                { backgroundColor: pressed ? '#f3f4f6' : '#f9fafb', opacity: pressed ? 0.7 : 1 }, 
-                receiptImage ? { padding: 0 } : null
-              ]}
-            >
-              {receiptImage ? (
-                <Image source={{ uri: receiptImage }} style={styles.previewImage} />
-              ) : (
-                /* FIX 3: 彻底删掉 pointerEvents: 'none'，让它变回正常的 View */
-                <View style={{ alignItems: 'center' }}> 
-                  <Ionicons name="cloud-upload-outline" size={28} color="#9ca3af" />
-                  <ThemedText style={{ color: '#9ca3af', marginTop: 4 }}>{t("receipts")}</ThemedText>
-                </View>
-              )}
-            </Pressable>
-          </View>
-
-          <View style={{ height: 24 }} />
-          <PrimaryButton label={t("addExpense")} onPress={handleSave} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      <Modal visible={showAddPeople} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <ThemedView style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <ThemedText type="defaultSemiBold">{t("step4Title")}</ThemedText>
-              <Pressable onPress={() => { setShowAddPeople(false); setInviteSearch(""); }}>
-                <Ionicons name="close" size={20} />
-              </Pressable>
-            </View>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {/* 1. 过滤掉自己后的好友列表逻辑 */}
-              {friends.filter(f => f.uid !== auth.currentUser?.uid).length === 0 ? (
-                <View style={{ padding: 20, alignItems: 'center' }}>
-                  <ThemedText style={{ color: '#9ca3af' }}>{t("noFriends") || "You don't have any friends"}</ThemedText>
-                </View>
-              ) : (
-                friends.map((friend) => (
-                  <Pressable key={friend.uid} onPress={() => toggleParticipant(friend.uid)}>
-                    <ThemedView style={styles.modalRow}>
-                      
-                      {/* 2. 核心改动：不再使用 Image 标签，直接显示首字母 */}
-                      <View style={[styles.avatarCircle, { backgroundColor: '#3b82f6', justifyContent: 'center', alignItems: 'center' }]}>
-                        <ThemedText style={{ color: 'white', fontWeight: 'bold' }}>
-                          {(friend.displayName || "U").charAt(0).toUpperCase()}
-                        </ThemedText>
-                      </View>
-
-                      <ThemedText style={{ flex: 1 }}>{friend.displayName}</ThemedText>
-
-                      {/* 3. 勾选逻辑 */}
-                      {participantIds.map(id => id.trim()).includes(friend.uid.trim()) && (
-                        <Ionicons name="checkmark-circle" size={20} color="#2563eb" />
-                      )}
-                    </ThemedView>
-                  </Pressable>
-                ))
-              )}
-            </ScrollView>
-            <PrimaryButton label="Done" onPress={() => setShowAddPeople(false)} />
-          </ThemedView>
-        </View>
-      </Modal>
-    </AppScreen>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -465,5 +396,42 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  receiptsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  receiptThumbnail: {
+    width: '30%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#f3f4f6',
+    position: 'relative',
+  },
+  receiptImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  removeReceiptBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+  },
+  addReceiptBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2563eb',
   },
 });
