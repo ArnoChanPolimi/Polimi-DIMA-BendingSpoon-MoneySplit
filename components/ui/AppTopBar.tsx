@@ -33,7 +33,7 @@ type AppTopBarProps = {
 export default function AppTopBar({
   title,
   showBack = false,
-  backSize = 20,
+  backSize = 25,
   onBackPress,
   rightLabel,
   onRightPress,
@@ -60,7 +60,7 @@ export default function AppTopBar({
             <PixelIcon name="back" size={backSize} color={textColor} />
           </Pressable>
         ) : (
-          <View style={{ width: 20 }} />
+          <View style={{ width: 25 }} />
         )}
       </View>
 

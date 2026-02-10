@@ -1,12 +1,15 @@
 // app\(tabs)\index.tsx
+import { useCurrency } from '@/core/currency/CurrencyContext';
 import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 // 1. Firebase 核心引用
 import { auth, db } from '@/services/firebase';
+import { getCurrentMonthSpend } from '@/services/statsManager';
 // 导入统一的假数据源
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
 import { collection, onSnapshot, or, orderBy, query, where } from 'firebase/firestore';
@@ -19,7 +22,15 @@ import { Ionicons } from '@expo/vector-icons';
 
 
 export default function GroupsScreen() {
-  const { language } = useSettings();
+  const { language, resolvedTheme } = useSettings();
+  const { defaultCurrency, formatAmount } = useCurrency();
+  const isDarkMode = resolvedTheme === 'dark';
+  
+  // 主题颜色
+  const cardBgColor = useThemeColor({}, 'card');
+  const textColor = useThemeColor({}, 'text');
+  const subtextColor = useThemeColor({}, 'icon');
+  
   const [firebaseGroups, setFirebaseGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -104,6 +115,11 @@ export default function GroupsScreen() {
       }
 
       setupListeners(user);
+
+      // 获取本月支出金额
+      getCurrentMonthSpend(user.uid).then(amount => {
+        setThisMonthAmount(amount);
+      });
     });
 
     return () => {
@@ -121,8 +137,12 @@ export default function GroupsScreen() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     const user = auth.currentUser;
-    if (user) {
+      if (user) {
       setupListeners(user);
+      // 刷新时也更新本月支出
+      getCurrentMonthSpend(user.uid).then(amount => {
+        setThisMonthAmount(amount);
+      });
     }
     // 保证至少显示 500ms 的刷新动画
     setTimeout(() => {
@@ -169,25 +189,37 @@ export default function GroupsScreen() {
         <ThemedText style={styles.subtitle}>
           {t("yourSharedBillGroups")}
         </ThemedText>
-        {/* 个人消费统计仪表盘入口 */}
+        {/* 个人消费统计仪表盘入口 - 适配主题 */}
         <Pressable 
-          style={styles.personalStatsCard}
-          // 💡 修改这里：确保路径直接指向 /user-report
+          style={[
+            styles.personalStatsCard,
+            { 
+              backgroundColor: isDarkMode ? '#1e293b' : '#ffffff',
+              borderWidth: 3,
+              borderColor: isDarkMode ? '#60a5fa' : '#60a5fa',
+              borderRadius: 0,
+            }
+          ]}
           onPress={() => router.push('/user-report')} 
         >
           <View style={styles.statsLeft}>
-            <ThemedText style={styles.statsSubtitle}>My Spending (This Month)</ThemedText>
-            {/* 这里稍后你可以改成动态获取的金额，现在先放着 */}
-            <ThemedText type="title" style={styles.statsMainAmount}>
-              {thisMonthAmount.toFixed(2)} €
+            <ThemedText style={[styles.statsSubtitle, { color: isDarkMode ? '#94a3b8' : '#64748b' }]}>
+              {t('mySpending')} ({t('thisMonth')})
+            </ThemedText>
+            {/* 数字使用普通字体，货币跟随设置 */}
+            <ThemedText style={[styles.statsMainAmount, { color: isDarkMode ? '#f1f5f9' : '#0f172a', fontFamily: undefined }]} numberOfLines={1} adjustsFontSizeToFit>
+              {formatAmount(thisMonthAmount, defaultCurrency)}
             </ThemedText>
           </View>
           
           <View style={styles.statsRight}>
-            <View style={styles.chartCircle}>
-              <Ionicons name="trending-up" size={20} color="#2563eb" />
+            <View style={[
+              styles.chartCircle,
+              { backgroundColor: isDarkMode ? '#1e3a5f' : '#eff6ff', borderRadius: 0 }
+            ]}>
+              <Ionicons name="trending-up" size={20} color="#60a5fa" />
             </View>
-            <ThemedText style={styles.viewDetailsText}>View Trends</ThemedText>
+            <ThemedText style={[styles.viewDetailsText, { color: '#60a5fa' }]}>{t('viewTrends')}</ThemedText>
           </View>
         </Pressable>
 
@@ -364,27 +396,24 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
     padding: 20,
-    borderRadius: 20,
+    borderRadius: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
   },
   statsLeft: {
     flex: 1,
+    marginRight: 12,
   },
   statsSubtitle: {
     fontSize: 12,
     color: '#64748b',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   statsMainAmount: {
     color: '#0f172a',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
+    marginTop: 4,
   },
   statsRight: {
     alignItems: 'center',

@@ -1,5 +1,5 @@
 {
-  "extends": "expo/tsconfig.json",
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
