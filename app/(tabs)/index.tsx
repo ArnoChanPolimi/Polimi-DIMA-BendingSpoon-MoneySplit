@@ -57,6 +57,26 @@ export default function GroupsScreen() {
     const unsubscribeGroups = onSnapshot(groupQuery, (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setFirebaseGroups(docs);
+      // ✨ 【新增核心逻辑】：实时计算本月总支出
+      const now = new Date();
+      const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      let totalForThisMonth = 0;
+
+      docs.forEach((group: any) => {
+        // 1. 检查日期是否是本月 (处理包含斜杠或横杠的情况)
+        const groupDate = group.startDate?.replace(/\//g, '-') || "";
+        if (groupDate.substring(0, 7) === currentMonthStr) {
+          
+          // 2. 找到当前用户的报销记录
+          const myRecord = group.involvedFriends?.find((f: any) => f.uid === user.uid);
+          if (myRecord && myRecord.claimedAmount) {
+            totalForThisMonth += parseFloat(myRecord.claimedAmount);
+          }
+        }
+      });
+
+      // 3. 更新状态，封面上的 0 瞬间变真钱
+      setThisMonthAmount(totalForThisMonth);
       setLoading(false);
       setIsRefreshing(false);
     }, (error) => {

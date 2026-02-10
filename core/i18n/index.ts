@@ -61,8 +61,18 @@ const translations = {
     friends: "Friends",
     quickAdd: "New",
 
+    // ===== Stats / Budget =====
+    monthlyLimit: "Monthly Budget Limit",
+    limitPlaceholder: "Enter your budget limit",
+    cancel: "Cancel",
+
+    overspent: "Overspent!",
+
     // ===== Groups list =====
+    yourSharedBillGroups: "Shared Bill Groups", // 新增这一行
     myGroups: "My Groups",
+    totalSpending: "Total Spending", // 新增
+    created: "Created",             // 新增
     groupsIntro: "Create a group for each trip or set of friends, then add expenses.",
     showFilters: "Show filters",
     hideFilters: "Hide filters",
@@ -288,8 +298,18 @@ If you have questions, please contact us through the app.`,
 
     error: "Errore",
 
+    // ===== Stats / Budget =====
+    monthlyLimit: "Limite Budget Mensile",
+    limitPlaceholder: "Inserisci il tuo limite",
+    cancel: "Annulla",
+    overspent: "Budget Superato!",
+
+    // ===== Groups list =====
+    yourSharedBillGroups: "Gruppi di Spesa Condivisi",
     myGroups: "I miei gruppi",
-    groupsIntro: "Crea un gruppo per ogni viaggio o gruppo di amici.",
+    totalSpending: "Spesa Totale", // 新增
+    created: "Creato il",          // 新增
+    groupsIntro: "Crea un gruppo per ogni viaggio...",
     showFilters: "Mostra filtri",
     hideFilters: "Nascondi filtri",
 
