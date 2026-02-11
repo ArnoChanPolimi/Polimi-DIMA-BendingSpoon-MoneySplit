@@ -418,7 +418,7 @@ import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { addDoc, arrayRemove, arrayUnion, collection, doc, increment, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, increment, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -456,6 +456,7 @@ type ExpenseItem = {
   id: string;
   title: string;
   amount: number;
+  amountInBase?: number;
   createdAt: number;
   participants: string[];
   payers: string[];
@@ -886,7 +887,9 @@ export default function GroupDetailScreen() {
         title: expenseTitle.trim(),
         amount: amount, // 保存原始输入的金额
         currency: inputCurrency,
-        inputCurrency: inputCurrency,
+        // --- 关键新增：记录存入瞬间的 EUR 金额 ---
+        amountInBase: amountInBase,
+        // inputCurrency: inputCurrency,
         inputAmount: parseFloat(expenseAmount),
         splitMode: splitMode,
         payers: selectedPayers,
@@ -909,6 +912,41 @@ export default function GroupDetailScreen() {
       console.error('Save expense error:', e);
       Alert.alert('Error', 'Failed to save expense');
     }
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!selectedExpense) return;
+
+    Alert.alert(
+      'Delete Expense',
+      `Are you sure you want to delete "${selectedExpense.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // 1. 删除具体的费用文档
+              await deleteDoc(doc(db, "groups", groupId!, "expenses", selectedExpense.id));
+
+              // 2. 冲抵总账 (减法)
+              // 优先取快照值，没有则取 amount (兼容旧数据)
+              const refundAmount = selectedExpense.amountInBase || selectedExpense.amount;
+              await updateDoc(doc(db, "groups", groupId!), {
+                totalExpenses: increment(-refundAmount)
+              });
+
+              setShowExpenseDetailModal(false);
+              Alert.alert('Success', 'Expense deleted');
+            } catch (e) {
+              console.error(e);
+              Alert.alert('Error', 'Failed to delete');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSaveEditedExpense = async () => {
@@ -1309,6 +1347,8 @@ export default function GroupDetailScreen() {
           <ThemedText style={styles.addExpenseBtnText}>+ Add New Expense</ThemedText>
         </Pressable>
       </ScrollView>
+
+      
 
       {/* Add Expense Modal */}
       <Modal visible={showExpenseModal} animationType="slide">
@@ -1999,6 +2039,41 @@ export default function GroupDetailScreen() {
                   </ThemedView>
                 )
               )}
+              {/* 原文：Receipts Section 渲染完毕后 */}
+              {/* --- 新增删除按钮区域 --- */}
+              {/* 确保 isEditingExpense 逻辑块内结构清晰 */}
+              {/* --- 新增删除按钮区域 --- */}
+              {/* --- 新增删除按钮区域 --- */}
+              {isEditingExpense && (
+                <View style={{ marginTop: 30, paddingHorizontal: 4, marginBottom: 40 }}>
+                  <Pressable 
+                    onPress={handleDeleteExpense}
+                    // 使用 Pressable 配合 style 函数来实现点击反馈，规避 TS 错误
+                    style={({ pressed }) => [
+                      {
+                        backgroundColor: '#fff1f2',
+                        paddingVertical: 16,
+                        borderWidth: 2,
+                        borderColor: '#fecaca',
+                        alignItems: 'center',
+                        opacity: pressed ? 0.6 : 1, // 实现类似 TouchableOpacity 的效果
+                      }
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="trash-outline" size={20} color="#e11d48" style={{ marginRight: 8 }} />
+                      {/* 强制使用 ThemedText 保证样式和类型一致 */}
+                      <ThemedText style={{ color: '#e11d48', fontWeight: '700', fontSize: 16 }}>
+                        DELETE EXPENSE
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                  
+                  <ThemedText style={{ textAlign: 'center', fontSize: 11, color: '#94a3b8', marginTop: 12 }}>
+                    Once deleted, the group balance will be recalculated.
+                  </ThemedText>
+                </View>
+              )}
             </ScrollView>
           )}
           
@@ -2479,5 +2554,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  deleteSection: {
+    marginTop: 40,
+    paddingHorizontal: 20,
+    alignItems: 'center',
   },
 });
