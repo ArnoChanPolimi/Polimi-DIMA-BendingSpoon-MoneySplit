@@ -132,6 +132,9 @@ export default function CreateGroupScreen() {
     try {
       const uniqueGroupId = generateGroupId();
 
+      const now = new Date();
+      const formattedStartDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
       // 处理封面
       let coverData: { type: string; value: string } | null = null;
       if (cover.type === 'image') {
@@ -145,7 +148,12 @@ export default function CreateGroupScreen() {
       // 检查名称是否重复
       setProcessStep('Checking name...');
       const groupsRef = collection(db, "groups");
-      const nameQuery = query(groupsRef, where("name", "==", trimmedName));
+      // const nameQuery = query(groupsRef, where("name", "==", trimmedName));
+      const nameQuery = query(
+        groupsRef, 
+        where("name", "==", trimmedName),
+        where("ownerId", "==", myUid) 
+      );
       const querySnapshot = await getDocs(nameQuery);
 
       if (!querySnapshot.empty) {
@@ -181,8 +189,10 @@ export default function CreateGroupScreen() {
         cover: coverData, // 新的 cover 格式: { type: 'image'|'color', value: string } 或 null
         ownerId: myUid,
         participantIds: allMemberIds,
+        payerIds: [myUid],
         involvedFriends: membersWithMe,
         totalExpenses: 0,
+        startDate: formattedStartDate,
         updatedAt: Date.now(),
         createdAt: Date.now(),
         status: 'ongoing',

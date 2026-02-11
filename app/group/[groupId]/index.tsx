@@ -580,6 +580,9 @@ export default function GroupDetailScreen() {
   // 新增：收据大图查看状态
   const [showReceiptViewer, setShowReceiptViewer] = useState(false);
   const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
+
+  // [新增] 用于存储当前用户在这个群组里的个人分摊总额
+  const [myPersonalTotal, setMyPersonalTotal] = useState(0);
   
   // 新增：编辑模式下的收据状态
   const [editedReceipts, setEditedReceipts] = useState<string[]>([]);
@@ -816,7 +819,8 @@ export default function GroupDetailScreen() {
   // --- 7. 保存 Expense ---
   const handleSaveExpense = async () => {
     // 以主币种金额为准
-    const amount = parseFloat(convertedAmount);
+    // const amount = parseFloat(convertedAmount);
+    const amount = parseFloat(expenseAmount);
     if (!expenseTitle.trim() || isNaN(amount) || amount <= 0) {
       Alert.alert('Error', 'Please enter a valid title and amount');
       return;
@@ -831,8 +835,18 @@ export default function GroupDetailScreen() {
     }
 
     try {
+      const splits: { [uid: string]: number } = {};
+      
+      let cloudUrls: string[] = []; // 存储云端 URL 的数组
+      if (receipts.length > 0) {
+        // 遍历本地路径数组，逐个调用你 firebase.ts 里的上传函数
+        const uploadTasks = receipts.map(uri => 
+          uploadImageAndGetUrl(uri, auth.currentUser!.uid)
+        );
+        // 等待所有图片上传到 Firebase Storage 并拿回 https 链接
+        cloudUrls = await Promise.all(uploadTasks);
+      }
       // 计算每人应付金额
-      let splits: { [uid: string]: number } = {};
       if (splitMode === 'equal') {
         const perPerson = amount / selectedParticipants.length;
         selectedParticipants.forEach(uid => {
@@ -880,7 +894,7 @@ export default function GroupDetailScreen() {
         splits: splits,
         createdAt: Date.now(),
         createdBy: auth.currentUser?.uid,
-        receiptUrls: receipts, // 保存收据图片
+        receiptUrls: cloudUrls, // 保存收据图片
       };
 
       await addDoc(collection(db, "groups", groupId!, "expenses"), expenseData);
@@ -901,6 +915,18 @@ export default function GroupDetailScreen() {
     if (!selectedExpense || !groupId) return;
     
     try {
+
+      let finalCloudUrls = editedReceipts;
+      const newLocalReceipts = editedReceipts.filter(uri => uri.startsWith('file://') || uri.startsWith('blob:'));
+      
+      if (newLocalReceipts.length > 0) {
+        const uploadTasks = newLocalReceipts.map(uri => uploadImageAndGetUrl(uri, auth.currentUser!.uid));
+        const uploadedUrls = await Promise.all(uploadTasks);
+        // 替换掉数组里的本地路径
+        finalCloudUrls = editedReceipts.map(uri => 
+          (uri.startsWith('file://') || uri.startsWith('blob:')) ? uploadedUrls.shift()! : uri
+        );
+      }
       const parsedAmount = parseFloat(editedAmount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         Alert.alert('Error', 'Please enter a valid amount');
@@ -973,7 +999,8 @@ export default function GroupDetailScreen() {
         splits: splits,
         currency: editedCurrency,
         splitMode: editedSplitMode,
-        receiptUrls: editedReceipts,
+        // receiptUrls: editedReceipts, // 直接使用 editedReceipts 可能包含本地路径，必须先处理上传
+        receiptUrls: finalCloudUrls, //  使用处理后的云端 URL
       });
 
       // Calculate amount difference for group totalExpenses update
@@ -1075,6 +1102,20 @@ export default function GroupDetailScreen() {
       });
       const unsubExpenses = onSnapshot(query(collection(db, "groups", groupId, "expenses"), orderBy("createdAt", "desc")), (snap) => {
         setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ExpenseItem[]);
+        // [新增逻辑开始]
+        const exps = snap.docs.map(d => ({ id: d.id, ...d.data() })) as ExpenseItem[];
+        setExpenses(exps);
+
+        const myUid = auth.currentUser?.uid;
+        if (myUid) {
+          const total = exps.reduce((sum, exp) => {
+            // 关键：从每笔 expense 的 splits 对象（注意：你的定义里 splits 是 {[uid: string]: number}）中找我的钱
+            const myShare = exp.splits && exp.splits[myUid] ? exp.splits[myUid] : 0;
+            return sum + myShare;
+          }, 0);
+          setMyPersonalTotal(total);
+        }
+        // [新增逻辑结束]
       });
       const unsubFriends = onSnapshot(query(collection(db, "users", user.uid, "friends"), orderBy("displayName", "asc")), (snap) => {
         setAllFriends(snap.docs.map(d => ({ uid: d.id, ...d.data() })) as any);
@@ -1111,9 +1152,11 @@ export default function GroupDetailScreen() {
             <Ionicons name="create" size={16} color="#ffffff" />
           </Pressable>
           <ThemedText type="title" style={styles.totalAmount}>
-            {totalSpendingInBase.toFixed(2)} €
+            {/* {totalSpendingInBase.toFixed(2)} €
+             */}
+            {myPersonalTotal.toFixed(2)} €
           </ThemedText>
-          <ThemedText style={styles.totalLabel}>{t('totalSpending')}</ThemedText>
+          <ThemedText style={styles.totalLabel}>{t('myShareTotalSpending')}</ThemedText>
         </ThemedView>
 
         <ThemedText type="subtitle" style={styles.sectionTitle}>Group Members</ThemedText>

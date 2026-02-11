@@ -71,6 +71,7 @@ const translations = {
     yourSharedBillGroups: "Shared Bill Groups", // 新增这一行
     myGroups: "My Groups",
     totalSpending: "Total Spending", // 新增
+    myShareTotalSpending: "My Share (Total)", // 新增
     created: "Created",             // 新增
     date: "Date",                   // 新增
     groupsIntro: "Create a group for each trip or set of friends, then add expenses.",
@@ -463,6 +464,8 @@ Se hai domande, contattaci attraverso l'app.`,
     created: "Creato il",
     totalSpending: "Spesa totale del gruppo",
     step4Title: "Aggiungi membri",
+    myShareTotalSpending: "La mia quota (Totale)", // 新增
+
 
     // ===== My Spending Stats =====
     mySpending: "Le mie spese",
