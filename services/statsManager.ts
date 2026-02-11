@@ -320,7 +320,7 @@ export const subscribeToUserStats = (
       const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
       // 🔑 固定显示3个月：当前月 + 前2个月
-      const monthsToShow = 3;
+      const monthsToShow = 4;
       for (let i = monthsToShow - 1; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -383,7 +383,10 @@ export const subscribeToUserStats = (
       // 清理旧的 expense 监听器
       expenseUnsubscribers.forEach(u => u());
       expenseUnsubscribers.length = 0;
-      groupMonthlyData.length = 0;
+      // groupMonthlyData.length = 0;
+      for (const key in groupMonthlyData) {
+        delete groupMonthlyData[key];
+      }
 
       // 为每个 group 创建 expense 监听器
       for (const groupDoc of groupSnap.docs) {
