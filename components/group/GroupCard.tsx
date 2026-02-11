@@ -3,7 +3,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { t } from '@/core/i18n';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, Text as RNText, StyleSheet, View } from 'react-native';
 
 export type ExpenseType =
   | 'travel'
@@ -66,10 +66,18 @@ export default function GroupCard({ group }: { group: Group }) {
         </ThemedText>
 
         {/* 成员 & 总额 */}
+        {/* 成员 & 总额 */}
         <View style={styles.row}>
-          <ThemedText>
-            {group.membersCount} {t('members')} · {group.totalExpenses.toFixed(2)} €
+          <ThemedText style={styles.membersText}>
+            {group.membersCount} {t('members')}
           </ThemedText>
+          
+          {/* 使用 RNText 强制打破主题颜色限制 */}
+          <View style={styles.amountBadge}>
+            <RNText style={styles.amountValue}>
+              {group.totalExpenses.toFixed(2)} €
+            </RNText>
+          </View>
         </View>
 
         {/* 消费类型 */}
@@ -120,6 +128,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center', // 确保垂直对齐
+    marginTop: 4,
+  },
+  membersText: {
+    fontSize: 13,
+    opacity: 0.8,
   },
   types: {
     fontSize: 12,
@@ -129,5 +143,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 11,
     opacity: 0.6,
+  },
+  amountBadge: {
+    backgroundColor: 'red', // 强制亮白
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 2,           // 加粗边框
+    borderColor: '#000000',   // 用黑色边框把白色和蓝色背景强行隔开
+    // 确保阴影不被切断
+    overflow: 'visible',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  amountValue: {
+    fontSize: 15,
+    fontWeight: '900',        // 极粗
+    color: '#000000',         // 强制纯黑文字
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
   },
 });
