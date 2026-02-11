@@ -1,8 +1,4 @@
-/**
- * 修改文件：services/external/quickChart.ts
- * 变更内容：扩展参数列表以接收颜色数组，并配置黑色字体和 datalabels 插件
- * 实现效果：解决参数数量不匹配报错，支持动态配色
- */
+// services/external/quickChart.ts
 
 export const generateMonthlyBarChartUrl = (
   labels: string[],
@@ -19,75 +15,55 @@ export const generateMonthlyBarChartUrl = (
     data: {
       labels: labels,
       datasets: [
-        { data: safeData, backgroundColor: bgColorsSafe },
-        { data: excessData, backgroundColor: bgColorsExcess }
+        { 
+          // 🛑 绝对不写 label
+          data: safeData, 
+          backgroundColor: bgColorsSafe 
+        },
+        { 
+          // 🛑 绝对不写 label
+          data: excessData, 
+          backgroundColor: bgColorsExcess 
+        }
       ]
     },
     options: {
-      responsive: false,
-      maintainAspectRatio: false,
-      legend: { display: false },
+      // 🔥 终极招式 1：在 options 根部直接暴力禁用
+      legend: false, 
+      layout: {
+        padding: {
+          top: 35,    // 给顶部留出足够高度放数字
+          bottom: 10,
+          left: 10,
+          right: 10
+        }
+      },
       plugins: {
+        legend: { display: false }, // 双重保险
         datalabels: {
           display: true,
           anchor: 'end',
           align: 'top',
-          offset: 5,
-          color: (ctx: any) => {
-            const idx = ctx.dataIndex;
-            const e = parseFloat(excessData[idx] as any) || 0;
-            return (ctx.datasetIndex === 1 && e > 0) ? '#ef4444' : '#1f2937';
-          },
-          font: { 
-            weight: 'bold', 
-            size: 18, 
-            family: 'Arial'
-          },
+          color: '#1f2937',
+          font: { weight: 'bold', size: 16 },
           formatter: (val: any, ctx: any) => {
             const idx = ctx.dataIndex;
-            const now = new Date();
-            const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const isCurrentMonth = labels[idx] === currentMonthStr;
-
-            if (val === null || val === undefined || isNaN(parseFloat(val))) return '';
-
-            if (!isCurrentMonth) {
-              return ctx.datasetIndex === 0 ? parseFloat(val).toFixed(0) : '';
-            }
-
-            const e = parseFloat(excessData[idx] as any) || 0;
-            const hasExcess = e > 0;
-            if (ctx.datasetIndex === (hasExcess ? 1 : 0)) {
-              const s = parseFloat(safeData[idx] as any) || 0;
-              return (s + e).toFixed(0);
-            }
-            return '';
+            const isLast = idx === labels.length - 1;
+            if (val === null || val === undefined) return '';
+            if (!isLast) return ctx.datasetIndex === 0 ? Math.round(val).toString() : '';
+            return (ctx.datasetIndex === 1 && val > 0) ? `Excess: +${Math.round(val)}` : '';
           }
         }
       },
       scales: {
-        yAxes: [{ 
-          stacked: true, 
-          display: false, 
-          ticks: { 
-            beginAtZero: true,
-            max: (maxValue || limit) * 1.2
-          } 
-        }],
-        xAxes: [{ 
-          stacked: true, 
-          gridLines: { display: false }, 
-          barPercentage: 0.7, 
-          categoryPercentage: 0.85,
-          ticks: {
-            fontColor: '#1f2937',
-            fontSize: 14,
-            fontStyle: 'bold'
-          }
-        }]
+        yAxes: [{ stacked: true, display: false, ticks: { beginAtZero: true, max: Math.max(maxValue, limit) * 1.3 } }],
+        xAxes: [{ stacked: true, gridLines: { display: false }, ticks: { fontStyle: 'bold' } }]
       }
     } 
   };
 
-  return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=${width}&h=320&devicePixelRatio=2`;
+  // 🔥 终极招式 2：使用 Date.now() 确保每一毫秒生成的 URL 都是全新的，彻底杀死缓存
+  const timestamp = Date.now();
+  return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=${width}&h=300&v=${timestamp}`;
 };
+
