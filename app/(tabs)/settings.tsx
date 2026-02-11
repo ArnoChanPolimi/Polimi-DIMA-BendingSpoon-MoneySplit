@@ -13,13 +13,22 @@ import { useSettings } from "@/core/settings/SettingsContext";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { UserAvatar } from "@/services/AuthContext";
 
+import {
+  Currency // <--- 确保从这里导入 API 定义的完整类型
+  ,
+
+  CURRENCY_NAMES,
+  CURRENCY_SYMBOLS,
+  getLatestRates,
+  SUPPORTED_CURRENCIES
+} from "@/services/exchangeRateApi";
+
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 // 修复：确保导入了 Modal 和 TextInput
-import { Image, ImageSourcePropType, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, ImageSourcePropType, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 
-type Currency = "EUR" | "USD" | "CNY";
 
 // 默认头像映射表
 const DEFAULT_AVATAR_SOURCES: Record<string, ImageSourcePropType> = {
@@ -81,6 +90,28 @@ export default function SettingsScreen() {
     setShowAccountMenu(false);
     setIsEditModalVisible(false);
     setTimeout(() => setIsRefreshing(false), 300);
+  };
+
+  // 在 component 内部新增：
+  const [isRateModalVisible, setIsRateModalVisible] = useState(false);
+  const [baseAmount, setBaseAmount] = useState('1'); 
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
+  const [loadingRates, setLoadingRates] = useState(false);
+
+  const [baseCurrency, setBaseCurrency] = useState<Currency>("EUR");
+  const [showBaseDropdown, setShowBaseDropdown] = useState(false); // 控制 Modal 内部的小下拉
+
+  // 处理汇率打开逻辑
+  const fetchRates = async (code: Currency) => {
+    setLoadingRates(true);
+    const data = await getLatestRates(code);
+    if (data) setRates(data);
+    setLoadingRates(false);
+  };
+
+  const handleOpenRates = () => {
+    setIsRateModalVisible(true);
+    fetchRates(baseCurrency);
   };
 
   return (
@@ -240,29 +271,110 @@ export default function SettingsScreen() {
           )}
 
           {/* Currency Selector */}
+          {/* 替换原有的 Currency Selector */}
           <SettingRow
             title={t("currency")}
-            onPress={() => setShowCurrencyDropdown(!showCurrencyDropdown)}
+            onPress={handleOpenRates} // 点击直接打开汇率转换器
           />
-          {showCurrencyDropdown && (
-            <View style={[styles.dropdown, { borderColor }]}>
-              {(["EUR", "USD", "CNY"] as const).map((curr) => (
-                <Pressable
-                  key={curr}
-                  style={[styles.dropdownOption, { borderBottomColor: borderColor }]}
-                  onPress={() => {
-                    setCurrency(curr);
-                    setShowCurrencyDropdown(false);
-                  }}
-                >
-                  <ThemedText>
-                    {curr === "EUR" ? "EUR €" : curr === "USD" ? "USD $" : "CNY ¥"}
-                  </ThemedText>
-                  {currency === curr && <Ionicons name="checkmark" size={20} color="#2563eb" />}
-                </Pressable>
-              ))}
+          <ThemedText style={{ fontSize: 10, opacity: 0.5, paddingHorizontal: 16, marginTop: -8, marginBottom: 8 }}>
+            Click to view live exchange rates
+          </ThemedText>
+
+          {/* 新增的实时汇率 Modal */}
+          {/* 汇率 Modal 内部 */}
+          <Modal visible={isRateModalVisible} transparent animationType="slide">
+            <View style={styles.rateModalOverlay}>
+              <ThemedView style={[styles.rateModalContent, { borderColor, backgroundColor: cardColor }]}>
+                
+                {/* 头部：标题 + 关闭 */}
+                <View style={styles.modalHeader}>
+                  <ThemedText type="subtitle">Currency Converter</ThemedText>
+                  <Pressable onPress={() => setIsRateModalVisible(false)}>
+                    <Ionicons name="close-circle" size={28} color={textColor} />
+                  </Pressable>
+                </View>
+
+                {/* 核心改动：基准货币选择区域 */}
+                <View style={[styles.amountInputContainer, { borderColor, backgroundColor: backgroundColor }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <ThemedText style={{ fontSize: 12, opacity: 0.6 }}>Base Currency</ThemedText>
+                    
+                    {/* 切换按钮 */}
+                    <Pressable 
+                      onPress={() => setShowBaseDropdown(!showBaseDropdown)}
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: borderColor + '40', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}
+                    >
+                      <ThemedText style={{ fontWeight: 'bold', marginRight: 4 }}>{baseCurrency}</ThemedText>
+                      <Ionicons name={showBaseDropdown ? "chevron-up" : "chevron-down"} size={14} color={textColor} />
+                    </Pressable>
+                  </View>
+
+                  {/* 基准货币下拉选择（Modal 内部） */}
+                  {showBaseDropdown && (
+                    <View style={{ marginBottom: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {SUPPORTED_CURRENCIES.map((code) => (
+                        <Pressable
+                          key={code}
+                          onPress={() => {
+                            setBaseCurrency(code);
+                            setShowBaseDropdown(false);
+                            fetchRates(code); // 切换后立即重新抓取数据
+                          }}
+                          style={{
+                            paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6,
+                            backgroundColor: baseCurrency === code ? '#2563eb' : borderColor + '20'
+                          }}
+                        >
+                          <ThemedText style={{ fontSize: 12, color: baseCurrency === code ? '#fff' : textColor }}>{code}</ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TextInput
+                      style={[styles.rateInput, { color: textColor, flex: 1 }]}
+                      value={baseAmount}
+                      onChangeText={setBaseAmount}
+                      keyboardType="numeric"
+                      selectTextOnFocus
+                    />
+                    <ThemedText style={{ fontSize: 24, fontWeight: '300', opacity: 0.5 }}>
+                      {CURRENCY_SYMBOLS[baseCurrency]}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                {/* 列表部分：过滤掉当前的 BaseCurrency */}
+                {loadingRates ? (
+                  <ActivityIndicator size="large" color="#2563eb" style={{ marginVertical: 40 }} />
+                ) : (
+                  <ScrollView style={{ maxHeight: 300 }}>
+                    {SUPPORTED_CURRENCIES.filter(c => c !== baseCurrency).map((curr) => {
+                      const rate = rates ? rates[curr] : null;
+                      const amount = parseFloat(baseAmount) || 0;
+                      const convertedValue = rate ? (rate * amount).toFixed(2) : '---';
+
+                      return (
+                        <View key={curr} style={styles.rateRow}>
+                          <View>
+                            <ThemedText style={{ fontWeight: '700' }}>{curr}</ThemedText>
+                            <ThemedText style={{ fontSize: 10, opacity: 0.5 }}>{CURRENCY_NAMES[curr]}</ThemedText>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                              <ThemedText style={styles.resultValue}>{convertedValue}</ThemedText>
+                              <ThemedText style={styles.resultSymbol}>{CURRENCY_SYMBOLS[curr]}</ThemedText>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </ThemedView>
             </View>
-          )}
+          </Modal>
 
           {/* Notifications */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16 }}>
@@ -403,5 +515,65 @@ const styles = StyleSheet.create({
   modalContent: { width: '85%', maxWidth: 400, padding: 24, borderRadius: 20, borderWidth: 1, gap: 15 },
   input: { borderWidth: 1, padding: 12, borderRadius: 10, fontSize: 16, marginTop: 10 },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  modalBtn: { padding: 10 }
+  modalBtn: { padding: 10 },
+  // 在 styles 对象中添加：
+  rateModalContent: {
+    width: '90%',
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  amountInputContainer: {
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  rateInput: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  rateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  apiCredit: {
+    fontSize: 10,
+    textAlign: 'center',
+    opacity: 0.4,
+    marginTop: 10,
+  },
+  resultValue: {
+    color: '#10b981', 
+    fontWeight: '700', 
+    fontSize: 18,
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace'
+  },
+  resultSymbol: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '600',
+    opacity: 0.8
+  },
+  rateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)', // 深色半透明背景
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
 });

@@ -17,7 +17,8 @@ interface ExchangeRateResponse {
   base_code: string;
   target_code?: string;
   conversion_rate?: number;
-  rates?: Record<string, number>;
+  // rates?: Record<string, number>;
+  conversion_rates?: Record<string, number>;
   error_type?: string;
 }
 
@@ -46,7 +47,8 @@ export async function getLatestRates(baseCurrency: Currency): Promise<Record<str
       return null;
     }
 
-    return data.rates || null;
+    // return data.rates || null;
+    return data.conversion_rates || null;
   } catch (error) {
     console.error("Failed to fetch exchange rates:", error);
     return null;

@@ -234,7 +234,6 @@ export function GroupCard({
           </ThemedText>
 
           <View style={styles.cardBottom}>
-            {/* 变动点 5: 动态文字颜色 - 日期变淡色 */}
             <ThemedText style={[
               styles.dateText, 
               hasCustomCover && { color: 'rgba(255, 255, 255, 0.8)' }
@@ -242,11 +241,8 @@ export function GroupCard({
               {t('started')} {displayDate}
             </ThemedText>
 
-            {/* 变动点 6: 动态文字颜色 - 金额在自定义背景下用亮蓝色突出 */}
-            <ThemedText style={[
-              styles.amountText, 
-              hasCustomCover && { color: '#60a5fa' }
-            ]}>
+            {/* 核心改动：去掉 amountBadge 容器，直接写 Text */}
+            <ThemedText style={styles.amountText}>
               {Number(totalExpenses).toFixed(2)} €
             </ThemedText>
           </View>
@@ -304,20 +300,35 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  cardBottom: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
   dateText: { 
     fontSize: 12, 
     opacity: 0.8, 
     color: '#1f2937',
   },
   amountText: { 
-    fontSize: 22, // 增大金额
+    // 1. 字体变小：从之前的 22 调小到 16-18
+    fontSize: 17, 
+    
+    // 2. 字体加粗：'900' 是最粗的级别
     fontWeight: '900', 
-    color: '#dc2626',
+    
+    // 3. 颜色保持亮白色
+    color: '#FFFFFF', 
+    
+    // 4. 字体风格
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+
+    // 5. 投影增强：字变小了，投影需要更凝聚才能看清
+    textShadowColor: 'rgba(0, 0, 0, 0.8)', 
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2, 
+  },
+  
+  cardBottom: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    // 因为字变小了，建议用 center 对齐，让日期和金额在一条水平线上
+    alignItems: 'center', 
+    marginTop: 8,
   },
 });
