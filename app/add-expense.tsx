@@ -61,7 +61,7 @@ export default function AddExpenseScreen() {
   const [inviteSearch, setInviteSearch] = useState("");
 
   // 新增：附件图片本地预览和上传
-  const [attachmentImage, setAttachmentImage] = useState<string | null>(null);
+  // const [attachmentImage, setAttachmentImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   // 新增：Receipts（收据）相关
@@ -69,26 +69,26 @@ export default function AddExpenseScreen() {
 
   const themedTextColor = useThemeColor({}, "text");
 
-  // 选择图片并本地预览
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      alert("We need camera roll permissions to upload attachments.");
-      return;
-    }
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.5,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setAttachmentImage(result.assets[0].uri);
-      }
-    } catch (e) {
-      alert("Failed to pick image");
-    }
-  };
+  // // 选择图片并本地预览
+  // const pickImage = async () => {
+  //   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  //   if (status !== "granted") {
+  //     alert("We need camera roll permissions to upload attachments.");
+  //     return;
+  //   }
+  //   try {
+  //     const result = await ImagePicker.launchImageLibraryAsync({
+  //       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //       allowsEditing: true,
+  //       quality: 0.5,
+  //     });
+  //     if (!result.canceled && result.assets && result.assets.length > 0) {
+  //       setAttachmentImage(result.assets[0].uri);
+  //     }
+  //   } catch (e) {
+  //     alert("Failed to pick image");
+  //   }
+  // };
 
   // 处理刷新
   const handleRefresh = () => {
@@ -210,7 +210,7 @@ export default function AddExpenseScreen() {
           <View style={{ marginTop: 20, backgroundColor: '#f0f7ff', padding: 12, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: '#2563eb' }}>
             <ThemedText type="subtitle" style={{ color: '#1e40af', marginBottom: 8 }}>📋 {t("attachments")} & Receipts</ThemedText>
             
-            {/* Attachments */}
+            {/* Attachments
             <ThemedText style={{ fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6 }}>📎 Attachment (Optional)</ThemedText>
             <Pressable 
               onPress={pickImage}
@@ -229,9 +229,9 @@ export default function AddExpenseScreen() {
                   <ThemedText style={{ color: useThemeColor({}, "placeholder"), marginTop: 4 }}>{t("attachments")}</ThemedText>
                 </View>
               )}
-            </Pressable>
+            </Pressable> */}
 
-            {/* Receipts */}
+            {/* Receipts 核心显示区域 */}
             <ThemedText style={{ fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6 }}>🧾 Receipts</ThemedText>
             <ThemedText style={{ fontSize: 11, opacity: 0.6, marginBottom: 8 }}>📤 Upload {receipts.length} receipt(s)</ThemedText>
             
@@ -266,21 +266,13 @@ export default function AddExpenseScreen() {
           </View>
 
           <View style={{ height: 24 }} />
-          <PrimaryButton label={uploading ? t("uploading") || "Uploading..." : t("addExpense")}
+          <PrimaryButton 
+            label={uploading ? t("uploading") || "Uploading..." : t("addExpense")}
             onPress={async () => {
               if (uploading) return;
               setUploading(true);
-              let attachmentUrl = "";
-              if (attachmentImage) {
-                try {
-                  attachmentUrl = await uploadImageAndGetUrl(attachmentImage, auth.currentUser?.uid || "anonymous");
-                } catch (e) {
-                  alert("Attachment upload failed");
-                  setUploading(false);
-                  return;
-                }
-              }
-              // 保存收据图片
+              
+              // 1. 保存收据图片
               let receiptUrls: string[] = [];
               if (receipts.length > 0) {
                 try {
@@ -295,30 +287,47 @@ export default function AddExpenseScreen() {
                 }
               }
               
-              // 保存账单到 Firestore（示例，需根据实际表结构调整）
+              // 2. 准备并存入数据
               try {
-                await addDoc(collection(db, "expenses"), {
-                  groupId,
-                  title,
-                  totalAmount,
-                  notes,
+                const amountNum = parseFloat(totalAmount);
+                
+                // 简单逻辑：等分分摊
+                const calculatedSplits: { [uid: string]: number } = {};
+                if (participantIds.length > 0) {
+                  const perPerson = amountNum / participantIds.length;
+                  participantIds.forEach(id => {
+                    calculatedSplits[id] = perPerson;
+                  });
+                }
+                
+                // 执行 Firestore 写入
+                await addDoc(collection(db, "groups", groupId!, "expenses"), {
+                  title: title,
+                  amount: amountNum,              // 修正字段：对齐详情页 amount
+                  amountInBase: amountNum,        // 补全字段：用于 EUR/基础币统计
                   currency: selectedCurrency,
-                  participantIds,
+                  participants: participantIds,    // 修正字段：对齐详情页 participants
+                  payers: [auth.currentUser?.uid], // 补全字段：默认自己付钱
+                  splits: calculatedSplits,        // 补全字段：分摊数据
+                  notes: notes,
                   createdBy: auth.currentUser?.uid,
                   createdAt: Date.now(),
-                  attachmentUrl: attachmentUrl || null,
-                  receiptUrls: receiptUrls.length > 0 ? receiptUrls : null,
+                  receiptUrls: receiptUrls.length > 0 ? receiptUrls : [], // 保持数组一致性
                 });
+
                 setUploading(false);
                 alert(t("addSuccess") || "Expense added!");
-                // 可选：重置表单/关闭弹窗
+                
+                // 清理状态
                 setTitle("");
                 setTotalAmount("");
                 setNotes("");
-                setAttachmentImage(null);
                 setReceipts([]);
-                // router.back();
+                
+                // 返回上一页
+                router.back();
               } catch (e) {
+                console.error(e);
                 setUploading(false);
                 alert(t("addFailed") || "Failed to add expense");
               }

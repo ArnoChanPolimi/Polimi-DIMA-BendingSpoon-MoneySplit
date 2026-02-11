@@ -504,7 +504,7 @@ export default function GroupDetailScreen() {
         // --- 关键新增：记录存入瞬间的 EUR 金额 ---
         amountInBase: amountInBase,
         // inputCurrency: inputCurrency,
-        inputAmount: parseFloat(expenseAmount),
+        // inputAmount: parseFloat(expenseAmount),
         splitMode: splitMode,
         payers: selectedPayers,
         participants: selectedParticipants,
@@ -1218,7 +1218,7 @@ export default function GroupDetailScreen() {
             )}
 
             {/* 统一使用顶部定义的预览列表，移除底部重复的 Add Receipt 按钮 */}
-            {receipts.length > 0 && (
+            {/* {receipts.length > 0 && (
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
@@ -1244,7 +1244,7 @@ export default function GroupDetailScreen() {
                   </View>
                 ))}
               </ScrollView>
-            )}
+            )} */}
 
             {/* Save Button */}
             <Pressable style={styles.saveExpenseBtn} onPress={handleSaveExpense}>
