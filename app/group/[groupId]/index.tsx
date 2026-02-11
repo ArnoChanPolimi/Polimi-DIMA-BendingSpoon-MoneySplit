@@ -1,417 +1,3 @@
-// // app\group\[groupId]\index.tsx
-// import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
-// import { Ionicons } from '@expo/vector-icons';
-// import { router, useLocalSearchParams } from 'expo-router';
-// import { arrayUnion, collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
-// import { useEffect, useState } from 'react';
-// import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-// // 1. 修改导入
-// import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
-
-// import { ThemedText } from '@/components/themed-text';
-// import { ThemedView } from '@/components/themed-view';
-// import AppScreen from '@/components/ui/AppScreen';
-// import AppTopBar from '@/components/ui/AppTopBar';
-// import * as ImagePicker from 'expo-image-picker';
-
-
-// type GroupDetail = {
-//   id: string;
-//   name: string;
-//   startDate: string;
-//   totalExpenses: number;
-//   status: 'ongoing' | 'finished';
-//   involvedFriends?: { uid: string; displayName: string }[]; // 因为在 QuickAdd 存的是这个字段
-//   receiptUrls?: string[];
-//   ownerId: string;       // 补上这个
-//   payerIds?: string[];   // 补上这个
-//   participantIds?: string[]; // 补上这个
-// };
-
-// type ExpenseItem = {
-//   id: string;
-//   title: string;
-//   amount: number;
-//   createdAt: number;
-//   participants: string[];
-// };
-
-// export default function GroupDetailScreen() {
-//   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  
-//   const [group, setGroup] = useState<GroupDetail | null>(null);
-//   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
-//   const [loading, setLoading] = useState(true);
-//   const [allFriends, setAllFriends] = useState<{ uid: string; displayName: string }[]>([]);
-//   const [isModalVisible, setIsModalVisible] = useState(false);
-//   const [activeRole, setActiveRole] = useState<'payer' | 'participant'>('participant');
-
-//   // 1. 在组件内定义更新逻辑
-//   const handleAddMember = async (friend: { uid: string, displayName: string }, role: 'payer' | 'participant') => {
-//     if (!groupId) return;
-//     try {
-//       const groupRef = doc(db, "groups", groupId);
-      
-//       // 构建更新数据
-//       const updateData: any = {
-//         involvedFriends: arrayUnion(friend), // 所有人都要进 involvedFriends
-//       };
-
-//       // 根据角色决定进哪个 ID 数组
-//       if (role === 'payer') {
-//         updateData.payerIds = arrayUnion(friend.uid);
-//       } else {
-//         updateData.participantIds = arrayUnion(friend.uid);
-//       }
-
-//       await updateDoc(groupRef, updateData);
-//     } catch (error) {
-//       console.error("Add member error:", error);
-//       Alert.alert("Error", "Failed to add member.");
-//     }
-//   };
-//   // 追加上传小票逻辑
-//   const handleAddReceipt = async () => {
-//     // 1. 权限检查 (针对 iOS/Android)
-//     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-//     if (status !== 'granted') {
-//       Alert.alert("Permission Denied", "We need camera roll permissions to upload receipts.");
-//       return;
-//     }
-
-// [FIX] Remove stray ternary JSX outside of a return block (lines 61-65)
-// The following code is invalid outside of a JSX return:
-// <ThemedText style={{ opacity: 0.5, textAlign: 'center', padding: 20 }}>No records found.</ThemedText>
-// ) : (
-//   expenses.map((item) => (
-//     <View key={item.id} style={styles.expenseRow}>
-//       <View style={{ flex: 1 }}>
-//         <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-//         <ThemedText style={styles.participantsText}>Involved: {item.participants?.join(', ') || 'Everyone'}</ThemedText>
-//       </View>
-//       <ThemedText type="defaultSemiBold" style={styles.amountText}>-{item.amount.toFixed(2)} €</ThemedText>
-//     </View>
-//   ))
-// )
-
-// This logic should only appear inside a JSX return, which is already present in the Expense History section below.
-
-//     try {
-//       // 2. 选择图片
-//       const result = await ImagePicker.launchImageLibraryAsync({
-//         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-//         allowsEditing: true,
-//         quality: 0.5,
-//       });
-
-//       if (!result.canceled && result.assets && groupId) {
-//         setLoading(true); // 开启全局 Loading 或局部的上传状态
-//         const newUri = result.assets[0].uri;
-        
-//         // 3. 上传到 Firebase Storage
-//         // 这里沿用你的 uniqueBillId 逻辑，直接用 groupId 作为文件夹名
-//         const uploadedUrl = await uploadImageAndGetUrl(newUri, groupId);
-
-//         // 4. 追加到 Firestore 的 receiptUrls 数组中
-//         const groupRef = doc(db, "groups", groupId);
-//         await updateDoc(groupRef, {
-//           receiptUrls: arrayUnion(uploadedUrl)
-//         });
-
-//         setLoading(false);
-//         Alert.alert("Success", "Receipt added successfully!");
-//       }
-//     } catch (error) {
-//       setLoading(false);
-//       console.error("Upload failed:", error);
-//       Alert.alert("Error", "Failed to upload receipt.");
-//     }
-//   };
-
-//   useEffect(() => {
-//     if (!groupId) {
-//       setLoading(false);
-//       return;
-//     }
-
-//     // 1. 静态数据检查
-//     const staticGroup = MOCK_GROUPS_DATA[groupId];
-//     if (staticGroup) {
-//       setGroup(staticGroup);
-//       setLoading(false);
-//       return;
-//     }
-
-//     // 2. 核心逻辑：监听 Auth 和 Data
-//     const unsubAuth = auth.onAuthStateChanged((user) => {
-//       if (!user) {
-//         console.log("No user found, resetting state");
-//         // 必须加上这几行，否则切换账号后，旧账号的数据还会挂在屏幕上
-//         setGroup(null);
-//         setExpenses([]);
-//         setAllFriends([]);
-//         setLoading(false); 
-//         return;
-//       }
-
-//       // 只有确定有 user 了，才开启 Firestore 监听
-//       const unsubGroup = onSnapshot(doc(db, "groups", groupId), (snap) => {
-//         if (snap.exists()) {
-//           const data = snap.data();
-//           setGroup({ id: snap.id, ...data } as GroupDetail);
-//         }
-//         setLoading(false); // ✅ 成功获取数据后关闭
-//       }, (err) => {
-//         console.error(err);
-//         setLoading(false); // ✅ 报错也要关闭
-//       });
-
-//       const unsubExpenses = onSnapshot(
-//         query(collection(db, "groups", groupId, "expenses"), orderBy("createdAt", "desc")),
-//         (snap) => {
-//           setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as ExpenseItem[]);
-//         }
-//       );
-
-//       const friendsRef = collection(db, "users", user.uid, "friends");
-//       const unsubFriends = onSnapshot(query(friendsRef, orderBy("displayName", "asc")), (snap) => {
-//         setAllFriends(snap.docs.map(d => ({ uid: d.id, ...d.data() })) as any);
-//       });
-
-//       // 清理函数嵌套
-//       return () => {
-//         unsubGroup();
-//         unsubExpenses();
-//         unsubFriends();
-//       };
-//     });
-
-//     return () => unsubAuth();
-//   }, [groupId]);
-
-//   if (loading) return <AppScreen><AppTopBar title="Loading..." showBack /><ThemedText style={{padding:20}}>Fetching...</ThemedText></AppScreen>;
-//   if (!group) return <AppScreen><AppTopBar title="Error" showBack /><ThemedText style={{padding:20}}>Group Not Found</ThemedText></AppScreen>;
-
-//   return (
-//     <AppScreen>
-//       <AppTopBar
-//         title={group.name}
-//         showBack
-//         rightIconName="chatbubbles-outline"
-//         onRightIconPress={() => router.push(`/group/${group.id}/chat`)}
-//       />
-
-//       <ScrollView contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 16 }}>
-//         {/* 顶部蓝色概览卡片 */}
-//         <ThemedView style={styles.headerCard}>
-//           {/* 【修改点 3】增加显眼的唯一 ID 展示 */}
-//           <View style={styles.idBadge}>
-//             <ThemedText style={styles.idBadgeText}>BILL NO: {group.id}</ThemedText>
-//           </View>
-
-//           <ThemedText style={styles.dateText}>Created on {group.startDate}</ThemedText>
-//           <ThemedText type="title" style={styles.totalAmount}>
-//             {group.totalExpenses.toFixed(2)} €
-//           </ThemedText>
-//           <ThemedText style={styles.totalLabel}>Total Group Spending</ThemedText>
-//         </ThemedView>
-
-//         <ThemedText type="subtitle" style={styles.sectionTitle}>Expense History</ThemedText>
-//         <ThemedView style={styles.listCard}>
-//           {expenses.length === 0 ? (
-//             <ThemedText style={{ opacity: 0.5, textAlign: 'center', padding: 20 }}>No records found.</ThemedText>
-//           ) : (
-//             expenses.map((item) => (
-//               <View key={item.id} style={styles.expenseRow}>
-//                 <View style={{ flex: 1 }}>
-//                   <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-//                   <ThemedText style={styles.participantsText}>Involved: {item.participants?.join(', ') || 'Everyone'}</ThemedText>
-//                 </View>
-//                 <ThemedText type="defaultSemiBold" style={styles.amountText}>-{item.amount.toFixed(2)} €</ThemedText>
-//               </View>
-//             ))
-//           )}
-//         </ThemedView>
-
-//         <ThemedText type="subtitle" style={styles.sectionTitle}>Group Members</ThemedText>
-//         <View style={styles.roleContainer}>
-//           {/* 1. Owner 区域 */}
-//           <ThemedText style={styles.roleLabel}>👑 Owner (Organizer)</ThemedText>
-//           <View style={styles.memberRow}>
-//             {group.involvedFriends?.filter(f => {
-//               // 确保 f 存在且 uid 匹配
-//               return f && f.uid === group.ownerId;
-//             }).map(f => (
-//               <View key={`owner-${f.uid}`} style={[styles.memberChip, styles.ownerChip]}>
-//                 <Ionicons name="ribbon" size={12} color="#f59e0b" style={{marginRight: 4}} />
-//                 <ThemedText style={styles.ownerText}>
-//                   {f.uid === auth.currentUser?.uid ? "Me (Owner)" : f.displayName}
-//                 </ThemedText>
-//               </View>
-//             ))}
-//           </View>
-
-//           {/* 2. Payers 区域 */}
-//           <ThemedText style={styles.roleLabel}>💳 Paid By</ThemedText>
-//           <View style={styles.memberRow}>
-//             {group.involvedFriends?.filter(f => group.payerIds?.includes(f.uid)).map(f => (
-//               <View key={`payer-${f.uid}`} style={[styles.memberChip, styles.payerChip]}>
-//                 <Ionicons name="card" size={12} color="#10b981" style={{marginRight: 4}} />
-//                 <ThemedText style={styles.payerText}>{f.displayName}</ThemedText>
-//               </View>
-//             ))}
-
-//             {/* 💡 补上这个按键 */}
-//             <Pressable 
-//               style={styles.addMemberChip} 
-//               onPress={() => {
-//                 setActiveRole('payer'); // 关键：标记我是要加付款人
-//                 setIsModalVisible(true);
-//               }}
-//             >
-//               <Ionicons name="add" size={14} color="#6b7280" />
-//               <ThemedText style={styles.addMemberText}>Add</ThemedText>
-//             </Pressable>
-//           </View>
-//           {/* 3. Participants 区域 */}
-//           <ThemedText style={styles.roleLabel}>👥 Splitting With</ThemedText>
-//           <View style={styles.memberRow}>
-//             {group.involvedFriends?.filter(f => group.participantIds?.includes(f.uid)).map(f => (
-//               <View key={`part-${f.uid}`} style={styles.memberChip}>
-//                 <ThemedText style={styles.chipText}>{f.displayName}</ThemedText>
-//               </View>
-//             ))}
-            
-//             {/* 3. Participants 区域的按钮 */}
-//             <Pressable 
-//               style={styles.addMemberChip} 
-//               onPress={() => {
-//                 setActiveRole('participant'); // 关键：标记我是要加分摊者
-//                 setIsModalVisible(true);
-//               }}
-//             >
-//               <Ionicons name="add" size={14} color="#6b7280" />
-//               <ThemedText style={styles.addMemberText}>Add</ThemedText>
-//             </Pressable>
-//           </View>
-//         </View>
-//         {/* --- 新增：小票展示区域 --- */}
-
-//       </ScrollView>
-//       {/* 选择好友的弹窗 */}
-//       <Modal visible={isModalVisible} animationType="slide" presentationStyle="pageSheet">
-//         <AppScreen>
-//           <AppTopBar title="Add Members" showBack onBackPress={() => setIsModalVisible(false)} />
-//           <ScrollView style={{ padding: 16 }}>
-//             {allFriends.map((friend) => (
-//               <Pressable 
-//                 key={friend.uid} 
-//                 style={styles.friendSelectItem} 
-//                 onPress={() => {
-//                   handleAddMember(friend, activeRole);
-//                   setIsModalVisible(false);
-//                 }}
-//               >
-//                 <View style={styles.miniAvatar}>
-//                   <ThemedText style={styles.avatarText}>{friend.displayName[0].toUpperCase()}</ThemedText>
-//                 </View>
-//                 <ThemedText style={{ flex: 1, marginLeft: 12 }}>{friend.displayName}</ThemedText>
-//                 <Ionicons name="person-add-outline" size={20} color="#2563eb" />
-//               </Pressable>
-//             ))}
-//           </ScrollView>
-//         </AppScreen>
-//       </Modal>
-//     </AppScreen>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   headerCard: { 
-//     paddingVertical: 16, // 缩减垂直内边距，让卡片变扁平
-//     paddingHorizontal: 20,
-//     borderRadius: 16,     // 稍微调小圆角
-//     backgroundColor: '#2563eb', 
-//     alignItems: 'center', 
-//     marginVertical: 10 
-//   },
-//   idBadge: { backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
-//   idBadgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold', fontFamily: 'monospace' },
-//   dateText: { color: 'rgba(255,255,255,0.7)', fontSize: 12 },
-//   totalAmount: { color: '#fff', fontSize: 36, fontWeight: '800', marginTop: 8 },
-//   totalLabel: { color: '#fff', opacity: 0.8, fontSize: 14 },
-//   sectionTitle: { marginTop: 24, marginBottom: 12 },
-//   listCard: { borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, backgroundColor: '#fff' },
-//   expenseRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-//   participantsText: { fontSize: 12, opacity: 0.5, marginTop: 2 },
-//   amountText: { color: '#ef4444', fontSize: 16, fontWeight: '600' },
-//   inviteCard: { borderRadius: 16, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, backgroundColor: '#fff' },
-//   inviteButtonsRow: { flexDirection: 'row', gap: 12 },
-//   actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, backgroundColor: '#f0f4ff' },
-//   actionText: { fontSize: 13, color: '#2563eb', fontWeight: '600' },
-//   memberRow: { 
-//     flexDirection: 'row', 
-//     flexWrap: 'wrap', 
-//     gap: 8, 
-//     marginTop: 12, // 增加一点间距，不要和标题贴太死
-//     paddingHorizontal: 4 
-//   },
-//   memberChip: { 
-//     flexDirection: 'row', alignItems: 'center', 
-//     paddingHorizontal: 10, paddingVertical: 6, 
-//     borderRadius: 20, backgroundColor: '#f0f7ff', // 淡淡的蓝色背景
-//     borderWidth: 1, borderColor: '#2563eb' 
-//   },
-//   miniAvatar: { 
-//     width: 18, height: 18, borderRadius: 9, 
-//     backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center', marginRight: 6 
-//   },
-//   avatarText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-//   chipText: { fontSize: 12, color: '#2563eb', fontWeight: '500' },
-//   addMemberChip: { 
-//     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, 
-//     borderRadius: 20, borderStyle: 'dashed', borderWidth: 1, borderColor: '#d1d5db' 
-//   },
-//   addMemberText: { fontSize: 12, color: '#6b7280', fontWeight: '600' },
-//   friendSelectItem: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     padding: 16,
-//     backgroundColor: '#fff',
-//     borderRadius: 12,
-//     marginBottom: 10,
-//     borderWidth: 1,
-//     borderColor: '#f0f0f0',
-//   },
-
-//   roleContainer: {
-//     backgroundColor: '#fff',
-//     borderRadius: 16,
-//     padding: 12,
-//     borderWidth: 1,
-//     borderColor: '#f1f5f9',
-//     marginTop: 8,
-//     shadowColor: "#000",
-//     shadowOffset: { width: 0, height: 1 },
-//     shadowOpacity: 0.05,
-//     shadowRadius: 2,
-//     elevation: 2, // 针对安卓
-//   },
-//   roleLabel: { 
-//     fontSize: 11, 
-//     color: '#94a3b8', 
-//     fontWeight: 'bold', 
-//     marginTop: 12, 
-//     marginBottom: 8,
-//     textTransform: 'uppercase'
-//   },
-//   ownerChip: { backgroundColor: '#fffbeb', borderColor: '#f59e0b' },
-//   ownerText: { color: '#b45309', fontSize: 12, fontWeight: '600' },
-//   payerChip: { backgroundColor: '#f0fdf4', borderColor: '#10b981' },
-//   payerText: { color: '#15803d', fontSize: 12, fontWeight: '600' },
-// });
-
-
 // app\group\[groupId]\index.tsx
 import { MOCK_GROUPS_DATA } from '@/assets/data/mockGroups';
 import { auth, db, uploadImageAndGetUrl } from '@/services/firebase';
@@ -426,11 +12,12 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AppScreen from '@/components/ui/AppScreen';
 import AppTopBar from '@/components/ui/AppTopBar';
-import { PixelIcon } from '@/components/ui/PixelIcon';
 import { useCurrency } from '@/core/currency/CurrencyContext';
 import { t } from '@/core/i18n';
 import { useSettings } from '@/core/settings/SettingsContext';
 import { convertCurrency } from '@/services/exchangeRateApi';
+
+import { handleReceiptCapture } from '@/services/external/cameraService';
 
 type InvolvedFriend = {
   uid: string;
@@ -756,25 +343,37 @@ export default function GroupDetailScreen() {
     setReceipts([]);
   };
 
-  // 选择收据图片
-  const pickReceipt = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need camera roll permissions to upload receipts.');
-      return;
-    }
+  /**
+ * 修改后的完整 pickReceipt
+ * 替换了原有的权限申请和 ImagePicker 直接调用
+ */
+  const pickReceipt = async (mode: 'camera' | 'library') => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.5,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newUri = result.assets[0].uri;
-        setReceipts((prev) => [...prev, newUri]);
+      // 1. 调用我们在 cameraService 中封装的逻辑
+      // 它包含了你原来的 ImagePicker.launchImageLibraryAsync 逻辑
+      // 同时也新增了 ImagePicker.launchCameraAsync 逻辑
+      const uri = await handleReceiptCapture(mode);
+      
+      if (uri) {
+        // 2. 状态更新逻辑升级：
+        // 如果当前正在编辑已有的账单，更新 editedReceipts
+        // 如果是新开的账单，更新 receipts
+        if (isEditingExpense) {
+          setEditedReceipts((prev) => [...prev, uri]);
+        } else {
+          setReceipts((prev) => [...prev, uri]);
+        }
       }
     } catch (e) {
-      Alert.alert('Error', 'Failed to pick receipt image');
+      console.error('Pick receipt error:', e);
+      
+      // 统一的错误反馈
+      const errorMessage = mode === 'camera' ? 'Failed to take photo' : 'Failed to pick image';
+      if (Platform.OS === 'web') {
+        window.alert(errorMessage);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     }
   };
 
@@ -818,13 +417,30 @@ export default function GroupDetailScreen() {
 
   // --- 7. 保存 Expense ---
   const handleSaveExpense = async () => {
+    const trimmedTitle = expenseTitle.trim(); // 1. 统一去除首尾空格
     // 以主币种金额为准
     // const amount = parseFloat(convertedAmount);
     const amount = parseFloat(expenseAmount);
+    // 2. 原始合法性校验（保留原样）
     if (!expenseTitle.trim() || isNaN(amount) || amount <= 0) {
       Alert.alert('Error', 'Please enter a valid title and amount');
       return;
     }
+
+    // 3. 重名检查（仅保留一套，放在 try 之前）
+    const isDuplicate = expenses.some(
+      (exp) => exp.title.toLowerCase() === trimmedTitle.toLowerCase()
+    );
+
+    if (isDuplicate) {
+      Alert.alert(
+        'Duplicate Name', 
+        'An expense with this name already exists. Please use a unique title.'
+      );
+      return;
+    }
+
+    // 4. 参与人和付款人校验
     if (selectedParticipants.length === 0) {
       Alert.alert('Error', 'Please select at least one participant');
       return;
@@ -835,17 +451,14 @@ export default function GroupDetailScreen() {
     }
 
     try {
-      const splits: { [uid: string]: number } = {};
-      
-      let cloudUrls: string[] = []; // 存储云端 URL 的数组
+      let cloudUrls: string[] = []; 
       if (receipts.length > 0) {
-        // 遍历本地路径数组，逐个调用你 firebase.ts 里的上传函数
         const uploadTasks = receipts.map(uri => 
           uploadImageAndGetUrl(uri, auth.currentUser!.uid)
         );
-        // 等待所有图片上传到 Firebase Storage 并拿回 https 链接
         cloudUrls = await Promise.all(uploadTasks);
       }
+      const splits: { [uid: string]: number } = {};
       // 计算每人应付金额
       if (splitMode === 'equal') {
         const perPerson = amount / selectedParticipants.length;
@@ -883,7 +496,8 @@ export default function GroupDetailScreen() {
       }
 
       const expenseData = {
-        title: expenseTitle.trim(),
+        // title: expenseTitle.trim(),
+        title: trimmedTitle, // 这里改用处理过的变量，确保存入的是 clean 数据
         amount: amount, // 保存原始输入的金额
         currency: inputCurrency,
         inputCurrency: inputCurrency,
@@ -1426,6 +1040,45 @@ export default function GroupDetailScreen() {
               </Pressable>
             </View>
 
+            {/* Receipts Selection - 规范化样式并移除多余切换栏 */}
+            <ThemedText style={styles.expenseLabel}>Receipts</ThemedText>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+              {Platform.OS !== 'web' && (
+                <Pressable 
+                  style={[styles.memberChip, { borderColor: '#2563eb', borderWidth: 1, backgroundColor: '#f0f7ff' }]} 
+                  onPress={() => pickReceipt('camera')}
+                >
+                  <Ionicons name="camera-outline" size={18} color="#2563eb" />
+                  <ThemedText style={{ color: '#2563eb', marginLeft: 6, fontWeight: '600' }}>Take Photo</ThemedText>
+                </Pressable>
+              )}
+              <Pressable 
+                style={[styles.memberChip, { borderColor: '#2563eb', borderWidth: 1, backgroundColor: '#f0f7ff' }]} 
+                onPress={() => pickReceipt('library')}
+              >
+                <Ionicons name="images-outline" size={18} color="#2563eb" />
+                <ThemedText style={{ color: '#2563eb', marginLeft: 6, fontWeight: '600' }}>
+                  {Platform.OS === 'web' ? 'Upload File' : 'Library'}
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            {/* 图片预览列表 */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+              {receipts.map((uri, index) => (
+                <View key={index} style={{ marginRight: 10, position: 'relative' }}>
+                  <Image source={{ uri }} style={{ width: 60, height: 60, borderRadius: 8 }} />
+                  <Pressable 
+                    onPress={() => setReceipts(prev => prev.filter((_, i) => i !== index))}
+                    style={{ position: 'absolute', top: -5, right: -5, backgroundColor: 'red', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <ThemedText style={{ color: 'white', fontSize: 12 }}>×</ThemedText>
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+            {/* 【收据 UI 插入结束】 */}
+
             {/* Payers Selection */}
             <ThemedText style={styles.expenseLabel}>Who Paid?</ThemedText>
             <View style={styles.participantGrid}>
@@ -1524,35 +1177,34 @@ export default function GroupDetailScreen() {
               </View>
             )}
 
-            {/* Receipts 部分 */}
-            <ThemedText style={styles.expenseLabel}>Receipts (Optional)</ThemedText>
-            <ThemedText style={{ fontSize: 12, color: '#ffffff', marginBottom: 8 }}>{receipts.length} receipt(s) selected</ThemedText>
-            
+            {/* 统一使用顶部定义的预览列表，移除底部重复的 Add Receipt 按钮 */}
             {receipts.length > 0 && (
-              <View style={styles.receiptsGrid}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={{ marginBottom: 20, paddingVertical: 5 }}
+              >
                 {receipts.map((uri, index) => (
-                  <View key={index} style={styles.receiptThumbnail}>
-                    <Image source={{ uri }} style={styles.receiptImage} />
-                    <Pressable
-                      style={styles.removeReceiptBtn}
-                      onPress={() => setReceipts((prev) => prev.filter((_, i) => i !== index))}
+                  <View key={`preview-${index}`} style={{ marginRight: 12, position: 'relative' }}>
+                    <Image 
+                      source={{ uri }} 
+                      style={{ width: 80, height: 80, borderRadius: 4, borderWidth: 1, borderColor: '#e2e8f0' }} 
+                    />
+                    <Pressable 
+                      onPress={() => setReceipts(prev => prev.filter((_, i) => i !== index))}
+                      style={{ 
+                        position: 'absolute', top: -8, right: -8, 
+                        backgroundColor: '#ef4444', borderRadius: 12, 
+                        width: 24, height: 24, alignItems: 'center', justifyContent: 'center',
+                        elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2
+                      }}
                     >
-                      <Ionicons name="close-circle" size={20} color="#ef4444" />
+                      <Ionicons name="close" size={16} color="white" />
                     </Pressable>
                   </View>
                 ))}
-              </View>
+              </ScrollView>
             )}
-            
-            <Pressable
-              onPress={pickReceipt}
-              hitSlop={15}
-              style={styles.addReceiptBtn}
-            >
-              <PixelIcon name="add" size={20} color="#2563eb" />
-              <ThemedText style={{ color: '#2563eb', marginLeft: 8, fontWeight: '600', flex: 1 }}>Add Receipt</ThemedText>
-              {receipts.length > 0 && <ThemedText style={{ color: '#2563eb', fontWeight: 'bold' }}>{receipts.length}</ThemedText>}
-            </Pressable>
 
             {/* Save Button */}
             <Pressable style={styles.saveExpenseBtn} onPress={handleSaveExpense}>
