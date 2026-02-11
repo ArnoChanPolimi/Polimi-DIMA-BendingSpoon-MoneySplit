@@ -1,7 +1,8 @@
+// components\group\GroupCardWithListener.tsx
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { convertCurrency } from '@/services/exchangeRateApi';
-import { db } from '@/services/firebase';
+import { auth, db } from '@/services/firebase';
 import { collection, doc, getDocs, onSnapshot, orderBy, query, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
@@ -96,34 +97,36 @@ export function GroupCard({
       return;
     }
 
+    const myUid = auth.currentUser?.uid; // 获取当前用户 ID
     const baseCurrency = 'EUR';
-    let total = 0;
+    let myTotal = 0;
 
     for (const expense of expenses) {
+      let myShare = expense.splits && myUid ? (expense.splits[myUid] || 0) : 0;
       let amountInBase = expense.amount || 0;
       
       // 如果费用有货币信息且不是 EUR，转换到 EUR
-      if (expense.currency && expense.currency !== baseCurrency) {
+      // 如果这笔钱的分摊额不是 EUR，转换到 EUR（保持你原有的汇率转换逻辑）
+      if (myShare > 0 && expense.currency && expense.currency !== baseCurrency) {
         try {
           const conversionResult = await convertCurrency(
-            amountInBase,
+            myShare,
             expense.currency as any,
             baseCurrency as any
           );
           if (conversionResult?.success) {
-            amountInBase = conversionResult.convertedAmount;
+            myShare = conversionResult.convertedAmount;
           }
         } catch (error) {
-          console.error(`Currency conversion error for expense:`, error);
+          console.error(`Currency conversion error:`, error);
         }
       }
       
-      total += amountInBase;
+      myTotal += myShare;
     }
 
-    setTotalExpenses(total);
+    setTotalExpenses(myTotal); // 现在的 totalExpenses 其实是 myTotal
   };
-
   // 实时监听该 group 的 expenses 变化 和 status 变化
   useEffect(() => {
     const expensesRef = collection(db, "groups", group.id, "expenses");

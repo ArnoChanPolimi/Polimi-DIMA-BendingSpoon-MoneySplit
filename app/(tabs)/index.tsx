@@ -251,8 +251,18 @@ export default function GroupsScreen() {
         {allGroups.map((group) => {
           // 1. 动脑子逻辑：给缺失字段设置"回退值"
           const status = group?.status || 'ongoing'; // 如果没有 status，默认显示 ongoing
-          const safeExpenses = group?.totalExpenses || 0; // 如果没有金额，显示 0
           const displayDate = group?.startDate || (group?.updatedAt ? new Date(group.updatedAt).toLocaleDateString() : 'Unknown');
+
+          // 2.【核心修正】控制金额展示
+          const myUid = auth.currentUser?.uid;
+          // 如果 group 文档里有 userTotalShares 这个 Map，就取我的那份
+          // 如果没有（比如旧数据或假数据），才回退显示群组总额 group.totalExpenses
+          const myPersonalShare = (myUid && group?.userTotalShares) 
+            ? (group.userTotalShares[myUid] || 0) 
+            : (group?.totalExpenses || 0);
+
+          // 3. 将算好的个人金额赋值给 safeExpenses 传给子组件
+          const safeExpenses = myPersonalShare;
 
           return (
             <GroupCard 

@@ -116,6 +116,7 @@
 //   }
 // };
 
+
 // services/statsManager.ts
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -336,7 +337,7 @@ export const subscribeToUserStats = (
             bgColorsExcess.push('#FA5151');
           } else {
             safeData.push(total);
-            excessData.push(0);
+            excessData.push(null);
             bgColorsSafe.push('#2563eb');
             bgColorsExcess.push('transparent');
           }

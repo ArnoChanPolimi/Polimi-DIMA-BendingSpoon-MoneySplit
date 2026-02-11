@@ -226,10 +226,14 @@ export default function UserReportScreen() {
                     <ActivityIndicator size="large" style={{ marginTop: 50 }} />
                 ) : report ? (
                     <View style={styles.chartWrapper}>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <ScrollView 
+                            horizontal 
+                            showsHorizontalScrollIndicator={true} // 开启进度条，提示用户可以左右滑动看往月
+                            contentContainerStyle={{ alignItems: 'center' }}
+                        >
                             <Image 
                                 source={{ uri: report.url }} 
-                                style={{ height: 350, width: report.width }}
+                                style={{ height: 350, width: Math.max(report?.width || 0, 800) }}
                                 resizeMode="stretch"
                             />
                         </ScrollView>

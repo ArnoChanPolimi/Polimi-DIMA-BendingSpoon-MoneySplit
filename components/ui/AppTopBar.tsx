@@ -4,6 +4,7 @@ import { ThemedView } from "@/components/themed-view";
 import { PixelIcon } from "@/components/ui/PixelIcon";
 import { useThemeColor } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { router } from "expo-router";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 
@@ -48,19 +49,39 @@ export default function AppTopBar({
   const textColor = useThemeColor({}, "text");
   const borderColor = useThemeColor({}, "border");
 
+  // 2. 获取原生的 navigation 对象
+  const navigation = useNavigation();
+
+  // 3. 封装智能返回逻辑
+  const handleBack = () => {
+    if (onBackPress) {
+      onBackPress();
+      return;
+    }
+
+    // 集中处理点：检查是否有堆栈可以回退
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      // 如果无处可回（常见于从外部直接打开、Tab切换、或清理了Auth堆栈后）
+      // 安全地重定向到 Tab 首页
+      router.replace("/(tabs)"); 
+    }
+  };
+
   return (
     <ThemedView style={[styles.container, { backgroundColor: 'transparent' }]}>
-      {/* 左侧：可选返回按钮，占位保证标题居中 */}
       <View style={styles.left}>
         {showBack ? (
           <Pressable
-            onPress={onBackPress ?? (() => router.back())}
-            hitSlop={10}
+            onPress={handleBack} // 使用封装后的逻辑
+            hitSlop={15}
           >
             <PixelIcon name="back" size={backSize} color={textColor} />
           </Pressable>
         ) : (
-          <View style={{ width: 25 }} />
+          /* 4. 这里的占位建议与右侧对齐或保持弹性，防止标题偏移 */
+          <View style={{ width: backSize }} />
         )}
       </View>
 
