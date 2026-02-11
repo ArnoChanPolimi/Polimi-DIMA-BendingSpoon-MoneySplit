@@ -99,6 +99,35 @@ export default function CreateGroupScreen() {
     }
   };
 
+  // --- 新增：拍照功能 ---
+  const takePhotoWithCamera = async () => {
+    if (Platform.OS !== 'web') {
+      // 申请相机权限
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t("error"), "Sorry, we need camera permissions to make this work!");
+        return;
+      }
+    }
+
+    try {
+      let result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true, // 允许裁剪
+        aspect: [16, 9],     // 保持 16:9 比例
+        quality: 0.7,        // 压缩质量
+      });
+
+      if (!result.canceled && result.assets) {
+        setCover({ type: 'image', value: result.assets[0].uri });
+        setShowCoverPicker(false);
+      }
+    } catch (err) {
+      console.error("Camera launch failed:", err);
+      Alert.alert(t("error"), "Failed to open camera");
+    }
+  };
+
   // 选择颜色作为封面
   const selectCoverColor = (color: string) => {
     setCover({ type: 'color', value: color });
@@ -422,6 +451,12 @@ export default function CreateGroupScreen() {
                 </Pressable>
               ))}
             </View>
+
+            {/* --- 新增：拍照按钮 --- */}
+            <Pressable style={styles.coverPickerOption} onPress={takePhotoWithCamera}>
+              <Ionicons name="camera-outline" size={24} color="#3b82f6" />
+              <ThemedText style={{ marginLeft: 12, color: '#3b82f6' }}>Take a photo</ThemedText>
+            </Pressable>
 
             {/* 从相册选择 */}
             <Pressable style={styles.coverPickerOption} onPress={pickCoverFromGallery}>

@@ -1,11 +1,10 @@
 // components\group\GroupCardWithListener.tsx
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { convertCurrency } from '@/services/exchangeRateApi';
 import { auth, db } from '@/services/firebase';
 import { collection, doc, getDocs, onSnapshot, orderBy, query, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, ImageBackground, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 interface GroupCardProps {
   group: any;
@@ -163,6 +162,17 @@ export function GroupCard({
     return translations[language]?.[key] ?? translations['en'][key] ?? key;
   };
 
+  // --- 逻辑准备：解析封面数据 ---
+  // --- 逻辑准备：解析封面数据 ---
+  const coverData = group?.cover; 
+  const isImage = coverData?.type === 'image';
+  const isColor = coverData?.type === 'color';
+  const coverValue = coverData?.value;
+  const hasCustomCover = isImage || isColor;
+
+  // 修复类型报错：如果不是图片，传 undefined 而不是 null
+  const imageSource = isImage && coverValue ? { uri: coverValue as string } : undefined;
+
   return (
     <Pressable 
       onPress={onPress}
@@ -172,38 +182,76 @@ export function GroupCard({
         pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }
       ]}
     >
-      <ThemedView style={styles.cardContent}>
-        <View style={styles.cardTop}>
-          {/* 像素风状态标签 */}
-          <View style={[
-            styles.statusPill, 
-            { 
-              backgroundColor: currentStatus === 'ongoing' ? '#fecaca' : '#e5e7eb',
-              borderColor: currentStatus === 'ongoing' ? '#ef4444' : '#9ca3af',
-            }
-          ]}>
-            <ThemedText style={[
-              styles.statusText, 
-              { color: currentStatus === 'ongoing' ? '#dc2626' : '#4b5563' }
+      {/* 变动点 1: 使用 ImageBackground 替代原有的 ThemedView */}
+      <ImageBackground
+        source={imageSource}
+        style={[
+          styles.cardContent, 
+          isColor ? { backgroundColor: coverValue } : null,
+          !hasCustomCover && { backgroundColor: 'rgba(219, 234, 254, 0.7)' } // 默认蓝色
+        ]}
+        imageStyle={{ opacity: isImage ? 0.8 : 1 }} // 如果是图片，稍微给点透明度让文字更清晰
+      >
+        {/* 变动点 2: 增加一个 Overlay 层，统一处理内边距和图片上的遮罩效果 */}
+        <View style={[
+          styles.innerContent, 
+          isImage && { backgroundColor: 'rgba(0, 0, 0, 0.2)' } // 图片背景加深遮罩
+        ]}>
+          
+          <View style={styles.cardTop}>
+            {/* 像素风状态标签 */}
+            <View style={[
+              styles.statusPill, 
+              { 
+                backgroundColor: currentStatus === 'ongoing' ? '#fecaca' : '#e5e7eb',
+                borderColor: currentStatus === 'ongoing' ? '#ef4444' : '#9ca3af',
+              }
             ]}>
-              {(currentStatus === 'ongoing' ? t('notFinished') : t('finished')).toUpperCase()} 
+              <ThemedText style={[
+                styles.statusText, 
+                { color: currentStatus === 'ongoing' ? '#dc2626' : '#4b5563' }
+              ]}>
+                {(currentStatus === 'ongoing' ? t('notFinished') : t('finished')).toUpperCase()} 
+              </ThemedText>
+            </View>
+            
+            {/* 变动点 3: 动态文字颜色 - ID 在自定义背景下变为半透明白 */}
+            <ThemedText style={[
+              styles.billId, 
+              hasCustomCover && { color: 'rgba(255, 255, 255, 0.9)' }
+            ]}>
+              {/* {group.id.split('-').pop()} */}
+              {group.id} {/* 直接展示完整的 id */}
             </ThemedText>
           </View>
-          <ThemedText style={styles.billId}>{group.id}</ThemedText>
-        </View>
 
-        <ThemedText type="defaultSemiBold" style={styles.groupName}>
-          {group.name || 'Unnamed Group'}
-        </ThemedText>
-
-        <View style={styles.cardBottom}>
-          <ThemedText style={styles.dateText}>{t('started')} {displayDate}</ThemedText>
-          <ThemedText style={styles.amountText}>
-            {/* 实时显示转换后的总金额 */}
-            {Number(totalExpenses).toFixed(2)} €
+          {/* 变动点 4: 动态文字颜色 - 组名在自定义背景下变为白色 */}
+          <ThemedText type="defaultSemiBold" style={[
+            styles.groupName, 
+            hasCustomCover && { color: '#fff', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4 }
+          ]}>
+            {group.name || 'Unnamed Group'}
           </ThemedText>
+
+          <View style={styles.cardBottom}>
+            {/* 变动点 5: 动态文字颜色 - 日期变淡色 */}
+            <ThemedText style={[
+              styles.dateText, 
+              hasCustomCover && { color: 'rgba(255, 255, 255, 0.8)' }
+            ]}>
+              {t('started')} {displayDate}
+            </ThemedText>
+
+            {/* 变动点 6: 动态文字颜色 - 金额在自定义背景下用亮蓝色突出 */}
+            <ThemedText style={[
+              styles.amountText, 
+              hasCustomCover && { color: '#60a5fa' }
+            ]}>
+              {Number(totalExpenses).toFixed(2)} €
+            </ThemedText>
+          </View>
         </View>
-      </ThemedView>
+      </ImageBackground>
     </Pressable>
   );
 }
@@ -217,9 +265,13 @@ const styles = StyleSheet.create({
     borderColor: '#60a5fa',
   },
   cardContent: {
+    // 移除硬编码的背景色，移到组件内联样式中
+    minHeight: 130, // 稍微增加高度让图片更有张力
+  },
+  innerContent: {
     padding: 16,
-    backgroundColor: 'rgba(219, 234, 254, 0.7)',
-    borderWidth: 0,
+    flex: 1,
+    justifyContent: 'space-between',
   },
   cardTop: { 
     flexDirection: 'row', 
@@ -236,6 +288,7 @@ const styles = StyleSheet.create({
   statusText: { 
     fontSize: 8, 
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', 
+    fontWeight: '700',
   },
   billId: { 
     fontSize: 10, 
@@ -244,24 +297,27 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   groupName: { 
-    fontSize: 16, 
-    marginBottom: 12, 
+    fontSize: 20, // 增大字体，更有电影感
     color: '#1e293b',
-    fontWeight: '700',
+    fontWeight: '800',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)', // 给文字加点阴影防止背景干扰
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   cardBottom: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'flex-end',
+    marginTop: 8,
   },
   dateText: { 
     fontSize: 12, 
-    opacity: 0.6, 
+    opacity: 0.8, 
     color: '#1f2937',
   },
   amountText: { 
-    fontSize: 18, 
-    fontWeight: '700', 
+    fontSize: 22, // 增大金额
+    fontWeight: '900', 
     color: '#dc2626',
   },
 });
